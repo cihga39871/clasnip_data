@@ -1,0 +1,28 @@
+{
+    "Candidatus Liberibacter solanacearum - 202109": {
+        "groups": {
+            "C": 1,
+            "B": 2,
+            "Cras2": 3,
+            "Cras1b": 4,
+            "H": 5,
+            "A": 6,
+            "D": 5,
+            "Cras1a": 4,
+            "E": 3,
+            "G": 2,
+            "H-Con": 1,
+            "U": 2,
+            "F": 3
+        },
+        "refGenome": "/path/to/GCA_000183665.1_ASM18366v1_genomic.fasta",
+        "dbAccuracy": 0.9963768115942029,
+        "dbVcfReduced": "/path/to/Candidatus_Liberibacter_solanacearum_v2_202109/database.jl-v1.6.1.db-vcf.reduced.jld2",
+        "owner": "<official>",
+        "dbType": "genomic/multiple genes/single gene",
+        "region": "genomic/16s RNA",
+        "taxonomyRank": "Species",
+        "taxonomyName": "Candidatus Liberibacter solanacearum",
+        "date": "2022-02-22"
+    }
+}
