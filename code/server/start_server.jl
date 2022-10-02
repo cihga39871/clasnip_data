@@ -12,6 +12,7 @@ if "-h" in ARGS || "--help" in ARGS
 	--host HOST     Up server to HOST:PORT.
 	--port PORT     Up server to HOST:PORT.
 	--dev           Up server to HOST:PORT_DEV.
+	--no-precompile Do not run the precompile (and test) task.
 	""")
 	exit()
 end
@@ -51,7 +52,10 @@ end
 ClasnipMux.run_server(host = host, port = port)
 
 # test and precompile
-include("src/precompile.jl")
+if !("--no-precompile" in ARGS)
+	@info "Precompilation task can be accessed by variable :precompile_task"
+	precompile_task = Threads.@spawn include("$(@__DIR__)/src/precompile.jl")
+end
 
 if "--keep" in ARGS
 	while true

@@ -1,19 +1,22 @@
 <template>
   <div>
     <div class="q-pa-md">
+      <div class="q-pb-md q-pt-sm text-h6 text-blue">
+        Create A Clasnip Database
+      </div>
 
       <q-banner v-if="!hasLogin" dense class="bg-green-2 q-mb-md" rounded>
         <template v-slot:avatar>
           <q-icon name="info" color="green" />
         </template>
-        You need to log in to create database.
+        You need to log in to create a database.
         <template v-slot:action>
           <q-btn flat color="green-8" label="Register" @click="goTo('/register')"/>
           <q-btn flat color="green-8" label="Log In" @click="goTo('/login')"/>
         </template>
       </q-banner>
 
-      <q-stepper v-if="hasLogin" v-model="step" ref="stepper" vertical animated>
+      <q-stepper v-if="hasLogin" v-model="step" ref="stepper" vertical animated bordered flat>
 
         <!-- STEP 1 -->
         <!-- STEP 1 -->
@@ -21,7 +24,7 @@
 
         <q-step
           :name="1"
-          title="Create Database"
+          title="Database ID"
           icon="tab"
           :done="step > 1"
         >
@@ -29,7 +32,7 @@
             <div class="col-9">
               <!-- Description: only support CLso -->
               <div class="text-body2 text-grey-9">
-                Enter new database name
+                Enter a new database name
               </div>
 
               <q-input outlined bottom-slots v-model="dbName" dense>
@@ -68,7 +71,7 @@
                 <div class="text-body2 text-grey-9">
                   Taxonomic rank
                 </div>
-                <q-select outlined v-model="taxonomyRank" :options="taxonomyRankOptions" dense/>
+                <q-select outlined v-model="taxonomyRank" :options="taxonomyRankOptions" dense options-dense/>
               </div>
 
               <div class="col">
@@ -85,7 +88,7 @@
                 <div class="text-body2 text-grey-9">
                   Database type
                 </div>
-                <q-select outlined v-model="dbType" :options="dbTypeOptions" dense/>
+                <q-select outlined v-model="dbType" :options="dbTypeOptions" dense options-dense/>
               </div>
 
               <div class="col">
@@ -107,7 +110,7 @@
               The folder contains several subfolders, indicating classification groups. <br/>
               Sequences in Fasta format are placed under the subfolders. Each Fasta file is considered as one sample. <br/>
               <b>Accepted compressed method:</b> zip | tar.gz | tar.bz2 | tar.xz | tar.Z <br/>
-              <b>Size limit:</b> 20M
+              <b>Size limit:</b> 60M
             </div>
 
             <q-uploader
@@ -116,7 +119,7 @@
               :disable="disableUpload"
               style="max-width: 600px"
               flat bordered
-              max-file-size="20971520"
+              max-file-size="104857600"
               max-files="1"
               accept=".tar.gz, .zip, .tar.xz, .tar.z, .tar.Z, .tar.bz2, .tar"
               @rejected="onUploadReject"
@@ -354,7 +357,7 @@ export default {
     },
 
     onUploadReject: function () {
-      this.notifyWarn('Fail to upload due to restrictions: file size < 20M, extension is .tar.gz, .zip, .tar.xz, .tar.z, .tar.Z, .tar.bz2, .tar')
+      this.notifyWarn('Fail to upload due to restrictions: file size < 60M, extension is .tar.gz, .zip, .tar.xz, .tar.z, .tar.Z, .tar.bz2, .tar')
     },
     onUploadFailed: function (info) {
       this.fastaInfo = null
@@ -415,7 +418,7 @@ export default {
         .then(response => {
           this.showSubmitResult = true
           this.jobID = response.data.jobID
-          this.updateJob(response.data.jobID, '') // to local storage
+          this.updateJobQueryString(response.data.jobID) // to local storage
         })
         .catch(error => {
           this.disableConfirmStep = false

@@ -69,6 +69,7 @@ function api_rm_clasnip_database(request)
     # change to an existing directory. It is necessary because sometimes pwd() throw an error when current directory is not exist when deleted a failed database dir, but still in this directory.
     cd(Config.PROJECT_ROOT_FOLDER)
 
+    @warn "api_rm_clasnip_database: user $username removed database $db_path"
     rm(db_link, force=true)
     rm(db_path, force=true, recursive=true)
 

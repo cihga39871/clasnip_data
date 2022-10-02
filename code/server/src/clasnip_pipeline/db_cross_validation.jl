@@ -39,95 +39,107 @@ Return path of cross-validation databases in JLD2 format with the following vari
 """
 function clasnip_db_cross_validation_wrapper(
     db_vcf_path::AbstractString;
-	fasta_analysis_dir::AbstractString = get_fasta_analysis_dir(dirname(db_vcf_path)),
-    stats_low_coverages_path::AbstractString = abspath(dirname(db_vcf_path), "stat.low_coverages.txt"),
-    repeat::Int = 3,
-    min_prob::Float64 = 0.05,
-	user = user
+    fasta_analysis_dir::AbstractString=get_fasta_analysis_dir(dirname(db_vcf_path)),
+    stats_low_coverages_path::AbstractString=abspath(dirname(db_vcf_path), "stat.low_coverages.txt"),
+	reference_index_path = infer_reference_index_path(dirname(db_vcf_path)),
+    repeat::Int=3,
+    min_prob::Float64=0.05,
+    user=user
 )
-	#=
-	using JLD2
-	using Plots
-	using AverageShiftedHistograms
-	using StatsPlots
-    db_vcf_path = "/home/jiacheng/ClasnipWebData/database/clso_cv_16s/database.jl-v1.7.2.db-vcf"
-	db_vcf_path = "/home/jiacheng/ClasnipWebData/database/precompile_test/database.jl-v1.7.2.db-vcf"
-	fasta_analysis_dir = ClasnipPipeline.get_fasta_analysis_dir(dirname(db_vcf_path))
-	stats_low_coverages_path = abspath(dirname(db_vcf_path), "stat.low_coverages.txt")
-	# cd(dirname(db_vcf_path))
-	repeat = 3
-	min_prob = 0.05
-	n_repeat = 1
-	user = ""
-	try
-		pwd()
-	catch
-		cd(Config.PROJECT_ROOT_FOLDER)
-	end
-	=#
+    #=
+    	using JLD2
+    	using Plots
+    	using AverageShiftedHistograms
+    	using StatsPlots
+        db_vcf_path = "/home/jiacheng/ClasnipWebData/database/clso_cv_16s/database.jl-v1.7.2.db-vcf"
+    	db_vcf_path = "/home/jc/ClasnipWebData/database/precompile_test/database.jl-v1.7.2.db-vcf"
+    	fasta_analysis_dir = ClasnipPipeline.get_fasta_analysis_dir(dirname(db_vcf_path))
+    	stats_low_coverages_path = abspath(dirname(db_vcf_path), "stat.low_coverages.txt")
+		reference_index_path = infer_reference_index_path(dirname(db_vcf_path))
+    	# cd(dirname(db_vcf_path))
+    	repeat = 3
+    	min_prob = 0.05
+    	n_repeat = 1
+    	user = ""
+    	try
+    		pwd()
+    	catch
+    		cd(Config.PROJECT_ROOT_FOLDER)
+    	end
+    =#
+
+	@info Pipelines.timestamp() * "clasnip_db_cross_validation_wrapper" db_vcf_path fasta_analysis_dir reference_index_path
+
     low_coverages = CSV.read(stats_low_coverages_path, DataFrame; ntasks=1)
     low_coverage_samples = Set(low_coverages.LABEL)
 
-    # remove low covered samples from db_vcf
-    db_vcf = ClasnipPipeline.vcf_load(db_vcf_path)
-    filter!(:SAMPLE => (x -> !(x in low_coverage_samples)), db_vcf)
+    db_vcf_jld2_path = db_vcf_path * ".reduced.jld2"
+    @load db_vcf_jld2_path group_dict nsample_group
 
-    group_dict, nsample_group = ClasnipPipeline.get_sample_info_from_labels(db_vcf.SAMPLE)
+    # remove low covered samples from db_vcf
+    for label in low_coverage_samples
+        group, sample = split(label, '/')
+        filter!(x -> x != sample, group_dict[group])
+        nsample_group[group] -= 1
+    end
+    # db_vcf = ClasnipPipeline.vcf_load(db_vcf_path)
+    # filter!(:SAMPLE => (x -> !(x in low_coverage_samples)), db_vcf)
 
     db_vcf_jld2_path_ABs = String[]
-	db_qa_jobs = Job[]
+    db_qa_jobs = Job[]
 
-	outdir = dirname(db_vcf_path)
-	log_io = open(joinpath(outdir, "cross-validation.log"), "w+")
+    outdir = dirname(db_vcf_path)
+    log_io = open(joinpath(outdir, "cross-validation.log"), "w+")
+    
+	for n_repeat in 1:repeat
+		@info Pipelines.timestamp() * "Started: Generating Clasnip DB for Cross Validation #$(n_repeat)"
+		group_A_dict, group_B_dict, nsample_group_A, nsample_group_B = stratifed_split(group_dict, nsample_group)
 
-    for n_repeat in 1:repeat
-        @info "Started: Generating Clasnip DB for Cross Validation #$(n_repeat)"
-        group_A_dict, group_B_dict, nsample_group_A, nsample_group_B = stratifed_split(group_dict, nsample_group)
+		samples_A = group_dict_to_labels(group_A_dict)
+		samples_B = group_dict_to_labels(group_B_dict)
 
-        samples_A = group_dict_to_labels(group_A_dict)
-        samples_B = group_dict_to_labels(group_B_dict)
+		vcf_paths_A = [joinpath(fasta_analysis_dir, label) * ".fq.bam.all.vcf" for label in samples_A]
+		vcf_paths_B = [joinpath(fasta_analysis_dir, label) * ".fq.bam.all.vcf" for label in samples_B]
+		# generate_parsed_clasnip_db(inputs, labels, reference_index_path; min_prob::Float64=0.05)
 
-        db_vcf_A = filter(:SAMPLE => (x -> x in samples_A), db_vcf)
-        db_vcf_B = filter(:SAMPLE => (x -> x in samples_B), db_vcf)
+		db_vcf_parsed_A, groups_AB, group_A_dict, nsample_group_A = generate_parsed_clasnip_db(vcf_paths_A, collect(samples_A), reference_index_path; min_prob=0.05)
 
-        @info "Parsing db vcf"
-        db_vcf_parsed_A = ClasnipPipeline.parse_group_db_vcf(db_vcf_A, nsample_group_A; missing_as_ref=false, min_prob=min_prob)
-        db_vcf_parsed_B = ClasnipPipeline.parse_group_db_vcf(db_vcf_B, nsample_group_B; missing_as_ref=false, min_prob=min_prob)
-        filter!(:ALT2PROBs => d -> length(keys(d)) > 1, db_vcf_parsed_A)
-        filter!(:ALT2PROBs => d -> length(keys(d)) > 1, db_vcf_parsed_B)
+		db_vcf_parsed_B, groups_AB, group_B_dict, nsample_group_B = generate_parsed_clasnip_db(vcf_paths_B, collect(samples_B), reference_index_path; min_prob=0.05)
 
-        db_vcf_jld2_path_AB = "$db_vcf_path.cross-validation.$(n_repeat).jld2"
-        push!(db_vcf_jld2_path_ABs, db_vcf_jld2_path_AB)
-        groups_AB = collect(keys(nsample_group_A))
+		db_vcf_jld2_path_AB = "$db_vcf_path.cross-validation.$(n_repeat).jld2"
+		push!(db_vcf_jld2_path_ABs, db_vcf_jld2_path_AB)
 
-        @info "Saving parsed db vcf (cross-validation #$(n_repeat))"
+		@info Pipelines.timestamp() * "Saving parsed db vcf (cross-validation #$(n_repeat))"
 
-		db_vcf_parsed_A = ClasnipPipeline.parsed_db_vcf_to_mlst(db_vcf_parsed_A::DataFrame, groups_AB::Vector)
-		db_vcf_parsed_B = ClasnipPipeline.parsed_db_vcf_to_mlst(db_vcf_parsed_B::DataFrame, groups_AB::Vector)
+		db_vcf_parsed_A = ClasnipPipeline.parsed_db_vcf_to_mlst!(db_vcf_parsed_A::DataFrame, groups_AB::Vector)
+		db_vcf_parsed_B = ClasnipPipeline.parsed_db_vcf_to_mlst!(db_vcf_parsed_B::DataFrame, groups_AB::Vector)
 
-        cv_db = ClasnipPipeline.ClasnipCvDb(db_vcf_jld2_path_AB,
-            db_vcf_parsed_A, db_vcf_parsed_B,
-            groups_AB,
-            group_A_dict, group_B_dict,
-            nsample_group_A, nsample_group_B,
-            samples_A, samples_B, fasta_analysis_dir
-        );
+		unique_reference_for_db_vcf_parsed!(db_vcf_parsed_A)
+		unique_reference_for_db_vcf_parsed!(db_vcf_parsed_B)
+
+		cv_db = ClasnipPipeline.ClasnipCvDb(db_vcf_jld2_path_AB,
+			db_vcf_parsed_A, db_vcf_parsed_B,
+			groups_AB,
+			group_A_dict, group_B_dict,
+			nsample_group_A, nsample_group_B,
+			samples_A, samples_B, fasta_analysis_dir
+		)
 		@save db_vcf_jld2_path_AB cv_db
 
 		ClasnipPipeline.clasnip_cache_cv_database(cv_db, reload=true) # save cv_db to cache CLASNIP_CV_DB
 
-        # cross validation
+		# cross validation
 		db_qa_job_train_ab, db_qa_job_test_ab = clasnip_db_cross_validation(
-		    db_vcf_jld2_path_AB;
-			db_reverse = false,
-		    outdir = replaceext(db_vcf_jld2_path_AB, "analysis-AB"),
-		    user = user, log_io = log_io
+			db_vcf_jld2_path_AB;
+			db_reverse=false,
+			outdir=replaceext(db_vcf_jld2_path_AB, "analysis-AB"),
+			user=user, log_io=log_io
 		)
 		db_qa_job_train_ba, db_qa_job_ba = clasnip_db_cross_validation(
-		    db_vcf_jld2_path_AB;
-			db_reverse = true,
-		    outdir = replaceext(db_vcf_jld2_path_AB, "analysis-BA"),
-		    user = user, log_io = log_io
+			db_vcf_jld2_path_AB;
+			db_reverse=true,
+			outdir=replaceext(db_vcf_jld2_path_AB, "analysis-BA"),
+			user=user, log_io=log_io
 		)
 		push!(db_qa_jobs, db_qa_job_train_ab)
 		push!(db_qa_jobs, db_qa_job_test_ab)
@@ -137,28 +149,28 @@ function clasnip_db_cross_validation_wrapper(
 		# unload database after all job past
 		unload_cv_job = Job(
 			() -> ClasnipPipeline.clasnip_unload_cv_database(db_vcf_jld2_path_AB),
-			name = "Unload CV DB",
-			user = user,
-			dependency = [
-				PAST => db_qa_job_train_ab.id,
-				PAST => db_qa_job_test_ab.id,
-				PAST => db_qa_job_train_ba.id,
-				PAST => db_qa_job_ba.id
+			name="Unload CV DB",
+			user=user,
+			dependency=[
+				PAST => db_qa_job_train_ab,
+				PAST => db_qa_job_test_ab,
+				PAST => db_qa_job_train_ba,
+				PAST => db_qa_job_ba
 			])
 		submit!(unload_cv_job)
-    end
+	end
 
-	cv_summary_deps = [DONE => x.id for x in db_qa_jobs]
-	input_cv_summary = Dict(
-		"DB_QA_JOBS" => db_qa_jobs,
-		"OUTDIR" => dirname(db_vcf_path)
-	)
-	common_kwargs = (dir = outdir, stdout = log_io, stderr = log_io, stdlog = log_io, append = true, user = user, verbose = :min)
-	cv_summary_job = Job(ClasnipPipeline.program_clasnip_db_cross_validation_summary, input_cv_summary; dependency = cv_summary_deps, common_kwargs...)
-	submit!(cv_summary_job)
+    cv_summary_deps = [DONE => x for x in db_qa_jobs]
+    input_cv_summary = Dict(
+        "DB_QA_JOBS" => db_qa_jobs,
+        "OUTDIR" => dirname(db_vcf_path)
+    )
+    common_kwargs = (dir=outdir, stdout=log_io, stderr=log_io, stdlog=log_io, append=true, user=user, verbose=:min)
+    cv_summary_job = Job(ClasnipPipeline.program_clasnip_db_cross_validation_summary, input_cv_summary; dependency=cv_summary_deps, common_kwargs...)
+    submit!(cv_summary_job)
 
-	close_in_future(log_io, cv_summary_job)
-	return cv_summary_job
+    close_in_future(log_io, cv_summary_job)
+    return cv_summary_job
 end
 
 
@@ -219,7 +231,7 @@ function clasnip_db_cross_validation(
     user = "",
 	log_io = nothing
 )
-
+	@info Pipelines.timestamp() * "clasnip_db_cross_validation" outdir user
 	# prepare
     mkpath(outdir, mode=0o755)
     common_kwargs = (dir = outdir, stdout = log_io, stderr = log_io, stdlog = log_io, append = true, user = user, verbose = :min)
@@ -239,9 +251,9 @@ function clasnip_db_cross_validation(
             "OUT_PREFIX" => outprefix
         )
 		if isempty(vcf2mlst_jobs)
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2,common_kwargs...)
 		else
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; dependency = [PAST => vcf2mlst_jobs[1].id], common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, dependency = [PAST => vcf2mlst_jobs[1]], common_kwargs...)
 		end
         push!(vcf2mlst_jobs, j)
     end
@@ -250,7 +262,7 @@ function clasnip_db_cross_validation(
 	yield()
 
 	# db QA
-	identity_stats_deps = [DONE => x.id for x in vcf2mlst_jobs]
+	identity_stats_deps = [DONE => x for x in vcf2mlst_jobs]
     in_db_qa = Dict(
         "VCF2MLST_JOBS" => vcf2mlst_jobs,
         "LABELS" => collect(cv_db.samples_B),
@@ -305,9 +317,9 @@ function clasnip_db_cross_validation(
             "OUT_PREFIX" => outprefix
         )
 		if isempty(vcf2mlst_jobs_train)
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, common_kwargs...)
 		else
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; dependency = [PAST => vcf2mlst_jobs_train[1].id], common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, dependency = [PAST => vcf2mlst_jobs_train[1]], common_kwargs...)
 		end
 		push!(vcf2mlst_jobs_train, j)
 	end
@@ -316,7 +328,7 @@ function clasnip_db_cross_validation(
 	yield()
 
 	# db QA
-	identity_stats_deps = [DONE => x.id for x in vcf2mlst_jobs_train]
+	identity_stats_deps = [DONE => x for x in vcf2mlst_jobs_train]
 	in_db_qa = Dict(
 		"VCF2MLST_JOBS" => vcf2mlst_jobs_train,
 		"LABELS" => collect(cv_db.samples_A),
@@ -330,6 +342,8 @@ function clasnip_db_cross_validation(
 end
 
 function clasnip_db_cross_validation_summary(classifier_performance_paths::Vector, outdir::AbstractString)
+	@info Pipelines.timestamp() * "clasnip_db_cross_validation_summary" outdir
+	
 	training_paths = filter(x -> occursin("/training_performance/", x), classifier_performance_paths)
 	test_paths = filter(x -> occursin("/test_performance/", x), classifier_performance_paths)
 

@@ -19,21 +19,48 @@ PLOT_LOCK = SpinLock()
 """
 function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::String, db_prefix::String = joinpath(dirname(ref), splitext(basename(ref))[1] * ".jl-v$VERSION.db-vcf"); working_dir = "", outdir = working_dir, user = "", do_cross_validation::Bool = false)
 
+    @static if false
+        cd("/usr/database/processed/CLso_genes/CLso_12haplotypes_corrected")
+        groups = filter(isdir, readdir())
+        fastas = readlines(pipeline(`find $groups -type f`, `grep -E "fasta\$"`, `grep -v all.fasta`))
+        labels = fastas
+        ref = "/usr/database/processed/polychrome_classifier/genomes/Liberibacter/Candidatus_Liberibacter_solanacearum/HB/GCA_000183665.1_ASM18366v1/GCA_000183665.1_ASM18366v1_genomic.fasta"
+        ref = "B/GCA_000183665.1_ASM18366v1_genomic.fasta"
+        db_prefix = splitext(basename(ref))[1] * ".jl-v$VERSION.db-vcf"
+        outdir = working_dir = pwd()
+        user = "test"
+        clasnip_db_build(fastas, labels, ref, db_prefix)
+
+        cd("/home/jiacheng/analysis/CLso_12haplotypes_corrected5_clasnip_db/extracted")
+        groups = filter(isdir, readdir())
+        labels = fastas = readlines(pipeline(`find $groups -type f`, `grep -E "fasta\$"`, `grep -v all.fasta`))
+        ref = "F/MH259699.1.16S.CLso-HF.fasta"
+        db_prefix = splitext(basename(ref))[1] * ".jl-v$VERSION.db-vcf"
+        outdir = working_dir = pwd()
+        user = "test"
+    end
+
     working_dir = abspath(working_dir)
     outdir = abspath(outdir)
+
+    @info Pipelines.timestamp() * "clasnip_db_build" db_prefix working_dir outdir user do_cross_validation
 
     isdir(working_dir) || mkpath(working_dir, mode = 0o755)
     isdir(outdir) || mkpath(outdir, mode = 0o755)
 
     log_io = open(joinpath(outdir, "build.log"), "w+")
-	common_kwargs = (stdout = log_io, stderr = log_io, stdlog = log_io, append = true, user = user, verbose = :min)
+    if Config.JOB_LOGS_TO_STD
+	    common_kwargs = (stdout = Pipelines.stdout_origin, stderr = Pipelines.stdout_origin, stdlog = nothing, user = user, verbose = :min)
+    else
+	    common_kwargs = (stdout = log_io, stderr = log_io, stdlog = log_io, append = true, user = user, verbose = :min)
+    end
 
     ### fasta to fastq
     # run the first job to precompile (if not compiled)
     fa2fq_job = Job(ClasnipPipeline.program_fa2fq, "FASTA" => fastas[1]; dir = working_dir, common_kwargs...)
     submit!(fa2fq_job)
 
-    fa2fq_jobs = [Job(ClasnipPipeline.program_fa2fq, "FASTA" => f; dir = working_dir, dependency = [DONE => fa2fq_job.id], common_kwargs...) for f in fastas[2:end]]
+    fa2fq_jobs = [Job(ClasnipPipeline.program_fa2fq, "FASTA" => f; dir = working_dir, dependency = [DONE => fa2fq_job], common_kwargs...) for f in fastas[2:end]]
     submit!.(fa2fq_jobs)
 
     pushfirst!(fa2fq_jobs, fa2fq_job)
@@ -47,7 +74,7 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
             "REF" => ref,
             "FASTQ" => fastas[i] * ".fq"
         )
-        bowtie2_job = Job(ClasnipPipeline.program_bowtie2, in_bowtie2; dependency = [DONE => job.id], dir = working_dir, common_kwargs...)
+        bowtie2_job = Job(ClasnipPipeline.program_bowtie2, in_bowtie2; dependency = [DONE => job], dir = working_dir, common_kwargs...)
         push!(bowtie2_jobs, bowtie2_job)
     end
     submit!.(bowtie2_jobs)
@@ -61,7 +88,7 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
             "REF" => ref,
             "BAM" => fastas[i] * ".fq.bam"
         )
-        snp_job = Job(ClasnipPipeline.program_freebayes, in_snp; dependency = [DONE => job.id], dir = working_dir, common_kwargs...)
+        snp_job = Job(ClasnipPipeline.program_freebayes, in_snp; dependency = [DONE => job], dir = working_dir, common_kwargs...)
         push!(snp_jobs, snp_job)
     end
     submit!.(snp_jobs)
@@ -69,19 +96,20 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
     yield()
 
     # Run vcf_classifier: generate db vcf mode:
-    job_deps = [DONE => x.id for x in snp_jobs]
+    job_deps = [DONE => x for x in snp_jobs]
     in_gen_db = Dict(
         "VCF_FILES" => `$fastas.fq.bam.all.vcf`,
-        "LABELS" => labels
+        "LABELS" => labels,
+        "REF_INDEX" => ref * ".fai",
     )
     out_gen_db = Dict("DB_VCF" => db_prefix)
-    gen_db_job = Job(ClasnipPipeline.program_vcf_classifier_generate_db, in_gen_db, out_gen_db; dependency = job_deps, dir = working_dir, mem = 12GB, common_kwargs...)
+    gen_db_job = Job(ClasnipPipeline.program_vcf_classifier_generate_db, in_gen_db, out_gen_db; dependency = job_deps, dir = working_dir, mem = 12GB, ncpu = 5, common_kwargs...)
     submit!(gen_db_job)
 
     yield()
 
     ## Clasnip classification using new fasta and db
-    vcf2mlst_deps = [DONE => gen_db_job.id]
+    vcf2mlst_deps = [DONE => gen_db_job]
     vcf2mlst_jobs = Job[]
 
     # run the fist sample to precompile
@@ -89,7 +117,7 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
         "VCF" => fastas[1] * ".fq.bam.all.vcf",
         "DB_VCF_JLD2" => db_prefix * ".reduced.jld2"
     )
-    vcf2mlst_job = Job(ClasnipPipeline.program_vcf2mlst, in_vcf2mlst; dependency = vcf2mlst_deps, dir = working_dir, common_kwargs...)
+    vcf2mlst_job = Job(ClasnipPipeline.program_vcf2mlst, in_vcf2mlst; dependency = vcf2mlst_deps, dir = working_dir, ncpu = 2, mem = 2GB, common_kwargs...)
     submit!(vcf2mlst_job)
 
     # rest samples
@@ -98,7 +126,7 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
             "VCF" => fasta * ".fq.bam.all.vcf",
             "DB_VCF_JLD2" => db_prefix * ".reduced.jld2"
         )
-        push!(vcf2mlst_jobs, Job(ClasnipPipeline.program_vcf2mlst, in_vcf2mlst; dependency = [DONE => vcf2mlst_job.id], dir = working_dir, common_kwargs...))
+        push!(vcf2mlst_jobs, Job(ClasnipPipeline.program_vcf2mlst, in_vcf2mlst; dependency = [DONE => vcf2mlst_job], dir = working_dir, ncpu = 2, mem = 2GB, common_kwargs...))
     end
     submit!.(vcf2mlst_jobs)
 
@@ -106,7 +134,7 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
 
     yield()
 
-    identity_stats_deps = [DONE => x.id for x in vcf2mlst_jobs]
+    identity_stats_deps = [DONE => x for x in vcf2mlst_jobs]
     in_db_qa = Dict(
         "VCF2MLST_JOBS" => vcf2mlst_jobs,
         "LABELS" => labels,
@@ -124,7 +152,7 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
 	        "DB_VCF_PATH" => db_prefix,
 			"USER" => user
         )
-		db_cv_job = Job(ClasnipPipeline.program_clasnip_db_cross_validation_wrapper, in_db_cv; dependency = [DONE => db_qa_job.id], dir = outdir, common_kwargs...)
+		db_cv_job = Job(ClasnipPipeline.program_clasnip_db_cross_validation_wrapper, in_db_cv; dependency = [DONE => db_qa_job], dir = outdir, common_kwargs...)
 		submit!(db_cv_job)
 		last_job = db_cv_job
     end
@@ -164,6 +192,8 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     outdir = abspath(outdir)
     isdir(outdir) || mkpath(outdir, mode = 0o755)
 
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess" outdir db_vcf
+
     outfiles = Dict{String, Any}()
     nsample = length(labels)
 
@@ -172,6 +202,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     end
 
     # generating identity results for all samples
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: generating identity results for all samples" outdir db_vcf
     for i in 1:nsample
         label = labels[i]
         identity_res = identity_results[i]
@@ -188,6 +219,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 
     ### stats: identity distribution for each labeled group
     # using AverageShiftedHistograms
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: identity distribution for each labeled group" outdir db_vcf
     self_identity_res_cvg = @subset(all_identity_res, :SAME .== true, :COVERED_SNP_SCORE .>= coverage_cutoff)
     gdf_self_identity_res_cvg = groupby(self_identity_res_cvg, :LABELED_GROUP)
     identity_distributions = Dict{String, AverageShiftedHistograms.Ash}()
@@ -203,12 +235,14 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 
 
     ### compute probability based on identity distributions
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute probability based on identity distributions" outdir db_vcf
     @rtransform!(all_identity_res,
         # :P_VALUE = cumulated_density(identity_distributions, :GROUP, :PERCENT_MATCHED)
         :CDF = ClasnipPipeline.cumulated_density(identity_distributions, :GROUP, :PERCENT_MATCHED)
     )
 
     ### compute normalized probability for all sample
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute normalized probability for all sample" outdir db_vcf
     gdf_sample_identity_res = groupby(all_identity_res, :LABEL)
     @transform!(gdf_sample_identity_res,
         :PROBABILITY = ClasnipPipeline.value_normalize(:CDF)
@@ -221,16 +255,19 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     self_identity_res = @subset(all_identity_res, :SAME .== true)
 
     ### stats: wrongly classified samples
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: find wrongly classified samples" outdir db_vcf
     wrongly_classified = @subset(self_identity_res, :RANK .!= 1)
     outfiles["STAT_WRONG_CLASSIFIED"] = joinpath(outdir, "stat.wrongly_classified.txt")
     CSV.write(outfiles["STAT_WRONG_CLASSIFIED"], wrongly_classified, delim='\t')
 
     ### stats: low coverage samples
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: find low coverage samples" outdir db_vcf
     low_coverages = @subset(self_identity_res, :COVERED_SNP_SCORE .< coverage_cutoff)
     outfiles["STAT_LOW_COVERAGES"] = joinpath(outdir, "stat.low_coverages.txt")
     CSV.write(outfiles["STAT_LOW_COVERAGES"], low_coverages, delim='\t')
 
     ### stats: accuracy and identity
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute accuracy and identity" outdir db_vcf
 	if nrow(self_identity_res_cvg) > 0
 		accuracy_and_identity = @chain self_identity_res begin
 	        @subset(:COVERED_SNP_SCORE .>= coverage_cutoff)
@@ -263,11 +300,13 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     CSV.write(outfiles["STAT_ACCURACY_AND_IDENTITY"], accuracy_and_identity, delim='\t')
 
     # stats: overall accuracy
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute overall accuracy" outdir db_vcf
     db_accuracy = sum(accuracy_and_identity.N_ACCURATE) / sum(accuracy_and_identity.N_SAMPLE)
     outfiles["IDENTITY_DISTRIBUTIONS"] = joinpath(outdir, "stat.identity_distributions.jld2")
     @save outfiles["IDENTITY_DISTRIBUTIONS"] identity_distributions db_accuracy
 
     ### stats: ROC and more classifier performance metrics
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute classifier_performance" outdir db_vcf
     df_performance = ClasnipPipeline.classifier_performance(all_identity_res, outdir)
     outfiles["PLOT_ROC"] = []
     outfiles["STAT_CLASSIFIER_PERFORMANCE"] = joinpath(outdir, "stat.classifier_performance.txt")
@@ -275,6 +314,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 
 
     ### density plots for each group
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: density plots for each group" outdir db_vcf
     all_identity_res_cvg = @subset(all_identity_res, :COVERED_SNP_SCORE .>= coverage_cutoff)
     gdf_identity_res_cvg = groupby(all_identity_res_cvg, :LABELED_GROUP)
     density_plot_files = String[]
@@ -299,8 +339,10 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     outfiles["PLOT_DENSITIES"] = density_plot_files
 
     ### heatmap of identity
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: heatmap of identity" outdir db_vcf
 	if isempty(all_identity_res_cvg)
 		# not plot
+        @warn Pipelines.timestamp() * "clasnip_db_quality_assess: heatmap of identity: skip plot for empty all_identity_res_cvg" outdir db_vcf
 		outfiles["STAT_HEATMAP_IDENTITY"] = ""
 		outfiles["PLOT_HEATMAP_IDENTITY"] = ""
 	else
@@ -370,7 +412,9 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 	end
 
     ### count pairwise SNP
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups" outdir db_vcf
     if db_vcf == ""
+        @warn Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups: skip for db not provided" outdir db_vcf
         # db not provided, skip
         outfiles["STAT_PAIRWISE_SNP_SCORE"] = ""
         outfiles["STAT_PAIRWISE_SNP_SCORE_NAME_ORDERED"] = ""
@@ -381,7 +425,8 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
         snp_matrix, snp_matrix_name_ordered = ClasnipPipeline.pairwise_snp_score_for_db_groups(db_vcf, outplot_svg = outfiles["PLOT_HEATMAP_SNP_SCORE"], coverage_cutoff = coverage_cutoff)
 
 		if isnothing(snp_matrix) # failed
-			outfiles["STAT_PAIRWISE_SNP_SCORE"] = ""
+            @error Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups: failed: snp_matrix is nothing" outdir db_vcf
+            outfiles["STAT_PAIRWISE_SNP_SCORE"] = ""
 			outfiles["STAT_PAIRWISE_SNP_SCORE_NAME_ORDERED"] = ""
 			outfiles["PLOT_HEATMAP_SNP_SCORE"] = ""
 		else
@@ -506,14 +551,16 @@ end
 Return `heatmap_plot::Plots.Plot, snp_matrix::Matrix, snp_matrix_name_ordered::Matrix`
 """
 function pairwise_snp_score_for_db_groups(db_vcf::AbstractString; outplot_svg::AbstractString = "plot.heatmap_snp_score.svg", coverage_cutoff::Real = 5.0)
+
+    @info Pipelines.timestamp() * "pairwise_snp_score_for_db_groups" db_vcf outplot_svg
     if !isfile(db_vcf)
-		@error "Cannot load db_vcf: not a file: $db_vcf"
+		@error Pipelines.timestamp() * "pairwise_snp_score_for_db_groups: Cannot load db_vcf: not a file: $db_vcf"
         return nothing, nothing
     end
     try
         clasnip_load_database(db_vcf)
     catch e
-        @error "Cannot load db_vcf: $db_vcf" exception=e
+        @error Pipelines.timestamp() * "pairwise_snp_score_for_db_groups: Cannot load db_vcf: $db_vcf" exception=e
         return nothing, nothing
     end
 
@@ -605,6 +652,8 @@ function pairwise_snp_score_for_db_groups(db_vcf::AbstractString; outplot_svg::A
         "DIFF/COVERAGE" permutedims(groups[hcl2.order]);
         groups[hcl2.order] snp_label_matrix_ordered;
     ]
+
+    @info "pairwise_snp_score_for_db_groups: plot heatmap" db_vcf outplot_svg
 
 	wait_for_lock(PLOT_LOCK) do
 	    plot_heat = Plots.heatmap(snp_percent_matrix_reodered, colorbar=false,

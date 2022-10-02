@@ -27,7 +27,7 @@ isfile(vcf_classifier) || @warn("vcf_classifier.jl not found.")
 
 function fa2fq(input::AbstractString; output::AbstractString = input * ".fq",  read_length::Int = 120, sliding_step::Int = 10)
     reader = if occursin(r"\.gz$", input)
-        @error "Gzip file is not supported: $input"
+        @error Pipelines.timestamp() * "Gzip file is not supported: $input"
         return nothing
         # FASTA.Reader(GzipDecompressorStream(open(input, "r")))
     else
@@ -39,7 +39,7 @@ function fa2fq(input::AbstractString; output::AbstractString = input * ".fq",  r
     for record in reader
         record_len = length(FASTA.sequence(record))
 
-        @info "FA2FQ Loading sequence: $(FASTA.identifier(record)) (length=$record_len)"
+        @info Pipelines.timestamp() * "FA2FQ Loading sequence: $(FASTA.identifier(record)) (length=$record_len)"
 
 		sliding_end = max(1, record_len - read_length + sliding_step)
 
@@ -82,7 +82,7 @@ function has_bowtie2_index(fasta)
 	while isfile(fasta * ".bowtie2-building")
 		sleep(2)
 	end
-	exts = [".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", ".rev.1.bt2", ".rev.2.bt2"]
+	exts = [".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", ".rev.1.bt2", ".rev.2.bt2", ".fai"]
 	for ext in exts
 		isfile(fasta * ext) || (return false)
 	end
@@ -101,7 +101,7 @@ function build_bowtie2_index(fasta)
 			is_success = true
 		catch e
 			rethrow(e)
-			@error "Cannot build bowtie2 index for $fasta"
+			@error Pipelines.timestamp() * "Cannot build bowtie2 index for $fasta"
 		finally
 			rm(in_building_file)
 		end
@@ -150,19 +150,19 @@ program_freebayes = CmdProgram(
 )
 
 program_vcf_classifier_generate_db = CmdProgram(
-	name = "VCF Classifier - Generating Database VCF",
-	id_file = ".vcf-classifier-gen-db",
-	cmd_dependencies = [julia],
-	inputs = [
-		"VCF_FILES",
-		"LABELS",
-		"MIN_PROB" => 0.05 => Float64
-	],
-	outputs = [
-		"DB_VCF" => String,
-		"SAMPLE_RESULTS" => "<input>.classifier" => String
-	],
-	cmd = `$julia $vcf_classifier --generate-db-vcf --all-positions --db-vcf DB_VCF -o SAMPLE_RESULTS --labels LABELS --inputs VCF_FILES --min-prob MIN_PROB`
+    name="VCF Classifier - Generating Database VCF",
+    id_file=".vcf-classifier-gen-db",
+    cmd_dependencies=[julia],
+    inputs=[
+        "VCF_FILES",
+        "LABELS",
+        "REF_INDEX" => String,
+        "MIN_PROB" => 0.05 => Float64
+    ],
+    outputs=[
+        "DB_VCF" => String
+    ],
+    cmd=`$julia $vcf_classifier --generate-db-vcf --all-positions --reference-index REF_INDEX --db-vcf DB_VCF --min-prob MIN_PROB --labels LABELS --inputs VCF_FILES`
 )
 
 program_vcf2mlst = JuliaProgram(
@@ -252,8 +252,14 @@ program_clasnip_db_quality_assess = JuliaProgram(
 		coverage_cutoff = i["COVERAGE_CUTOFF"]
 
 		identity_results = map(vcf2mlst_jobs) do job
-		   res = result(job)[2]
-		   res["identity_res"]
+			res = result(job)[2]
+			if res["identity_res"] isa DataFrame
+				res["identity_res"]
+			else
+				# the job is done before and identity_res is not loaded.
+				# load manually
+				CSV.read(res["MLST_RES_TABLE"], DataFrame, ntasks=1, stringtype=String)
+			end
 	    end
 		clasnip_db_quality_assess(labels, identity_results, outdir=outdir, db_vcf=db_vcf, coverage_cutoff=coverage_cutoff)
 	end

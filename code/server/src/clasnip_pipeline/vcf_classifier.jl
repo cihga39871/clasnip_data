@@ -6,8 +6,16 @@ using CSV
 using JLD2
 using StatsBase
 using GenomicFeatures, GFF3
+using Dates
+using Pipelines
+using StringViews
 
 include("api.vcf_stats.jl")
+
+include("MemoryEfficientIOs.jl")
+using .MemoryEfficientIOs
+include("VCFLineInfos.jl")
+include("api.vcf_db_generation3.jl")
 
 description = """
 Classifier using VCF.
@@ -21,8 +29,11 @@ function parsing_args(args)
             help = "generate db-vcf file from inputs, and do no run sample classifier. If not specified, assume the inputs are new samples"
             action = :store_true
         "--all-positions"
-            help = "(with --generate-db-vcf) whether input vcf files contain all positions? If no, missing are treated as ref."
+            help = "(with --generate-db-vcf) whether input vcf files contain all positions? If no, missing are treated as ref. Not using it is deprecated!"
             action = :store_true
+        "--reference-index"
+            help = "(with --generate-db-vcf) input the fasta index file (fai) of the reference sequence."
+            required = true
         "--db-vcf", "-d"
             help = "(with --generate-db-vcf) output 'db-vcf' file. NOTE: the parsed db-vcf file named *.db-vcf.jld2 will be generated for later use"
             default = ""
@@ -33,8 +44,6 @@ function parsing_args(args)
         "--db-vcf-jld2", "-D"
             help = "(without --generate-db-vcf) input parsed db vcf in JLD2 format (result of `vcf_classifier.jl --generate-db-vcf`)"
             default = ""
-        "--save-all-locus"
-            action = :store_true
     end
     add_arg_group!(settings, "Sample VCF Input")
     @add_arg_table! settings begin
@@ -121,27 +130,29 @@ if args["generate-db-vcf"]
     db_vcf_path = args["db-vcf"]
     db_vcf_path == "" && error("--db-vcf cannot be empty with --generate-db-vcf")
 
-    @info "Generating db vcf"
-    @time generate_db_vcf(db_vcf_path, inputs, labels)
+    missing_as_ref = !args["all-positions"]
+    if missing_as_ref
+        @info "Generating db vcf: missing_as_ref = true, use old method."
+        @info "Generating db vcf"
+        @time generate_db_vcf(db_vcf_path, inputs, labels)
 
-    ### load infos
-    @info "Getting sample information"
-    group_dict, nsample_group = @time get_sample_info_from_db_vcf(db_vcf_path)
-    groups = collect(keys(nsample_group))
+        ### load infos
+        @info "Getting sample information"
+        group_dict, nsample_group = @time get_sample_info_from_db_vcf(db_vcf_path)
+        groups = collect(keys(nsample_group))
 
-    @info "Loading db vcf"
-    db_vcf = @time vcf_load(db_vcf_path)
+        @info "Loading db vcf"
+        db_vcf = @time vcf_load(db_vcf_path)
 
-    # parse db_vcf, generating dict of probability
-    @info "Parsing db vcf"
-    db_vcf_parsed = @time parse_group_db_vcf(db_vcf, nsample_group; missing_as_ref=!args["all-positions"], min_prob=args["min-prob"])
+        # parse db_vcf, generating dict of probability
+        @info "Parsing db vcf"
+        db_vcf_parsed = @time parse_group_db_vcf(db_vcf, nsample_group; missing_as_ref=missing_as_ref, min_prob=args["min-prob"])
 
-    if args["save-all-locus"]
-        @info "Saving parsed db vcf"
-        db_vcf_jld2_path = "$db_vcf_path.jld2"
-        @time @save db_vcf_jld2_path db_vcf_parsed groups group_dict nsample_group
-        @info "Raw data (db_vcf_parsed groups group_dict nsample_group) saved to $db_vcf_jld2_path"
+    else
+        reference_index_path = args["reference-index"]
+        db_vcf_parsed, groups, group_dict, nsample_group = generate_parsed_clasnip_db(inputs, labels, reference_index_path, min_prob=args["min-prob"])
     end
+
 
     @info "Saving parsed db vcf (reduced one)"
     filter!(:ALT2PROBs => d -> length(keys(d)) > 1, db_vcf_parsed)
@@ -167,7 +178,7 @@ res_classification = String[]
 res_count_covered_SNP = Int[]
 res_count_all_SNP = Int[]
 
-res_score_dict = Dict{SubString{String}, Vector{Float64}}()
+res_score_dict = Dict{SubString{String},Vector{Float64}}()
 for group in groups
     res_score_dict[group] = Vector{Float64}()
 end
@@ -177,7 +188,7 @@ for (i_input, input_file) in enumerate(inputs)
     input_label = labels[i_input]
     @info "VCF Classifier: Start classification" input_file input_label
 
-    input_file, label, classify_to, vcf, result, count_covered_SNP, count_all_SNP = classifier_single_sample(input_file, outprefix, db_vcf_parsed, groups; input_label=input_label, SNP_coverage_cutoff=SNP_coverage_cutoff);
+    input_file, label, classify_to, vcf, result, count_covered_SNP, count_all_SNP = classifier_single_sample(input_file, outprefix, db_vcf_parsed, groups; input_label=input_label, SNP_coverage_cutoff=SNP_coverage_cutoff)
 
     if isnothing(input_file)
         # input vcf does not contain vcf data rows
@@ -196,11 +207,11 @@ end
 
 ## output of result summary
 res_df = DataFrame(
-    INPUT = inputs,
-    CLASSIFICATION = res_classification,
-    COVERED_SNPS = res_count_covered_SNP,
-    ALL_SNPS = res_count_all_SNP,
-    LABEL = res_label
+    INPUT=inputs,
+    CLASSIFICATION=res_classification,
+    COVERED_SNPS=res_count_covered_SNP,
+    ALL_SNPS=res_count_all_SNP,
+    LABEL=res_label
 )
 for group in groups
     res_df[!, Symbol("SCORE_" * uppercase(group))] = res_score_dict[group]
@@ -208,4 +219,4 @@ end
 
 out_res_path = replace(outprefix, r"<input>[\.\_\-]*" => "") * ".summary.tsv"
 CSV.write(out_res_path, res_df; delim='\t')
-@info "VCF Classifier: Write summary for all samples" OUT_FILE=out_res_path
+@info "VCF Classifier: Write summary for all samples" OUT_FILE = out_res_path

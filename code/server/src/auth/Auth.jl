@@ -16,7 +16,7 @@ include("init_database.jl")
 
 include("tokens.jl")
 export Token, update_time_last_token_clear,
-generate_token, authorize_token, has_token, is_token_valid, destory_token, clean_old_tokens, encrypt, validate_null
+generate_token, authorize_token, has_token, is_token_valid, destory_token, clean_old_tokens, validate_null
 
 include("auth_api.jl")
 export api_get_token, api_login, api_register, api_logout, api_validate_token, api_validate_token_header

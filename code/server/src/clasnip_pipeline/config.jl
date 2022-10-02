@@ -3,7 +3,7 @@
 """
 If `CLASNIP_DB` uses more than `DB_MEM_LIMIT` bytes in memory, unload databases based on the last access time.
 """
-const DB_MEM_LIMIT = 128 * 1024 * 1024
+const DB_MEM_LIMIT = 8GB
 
 """
 `DB_PROTECT_TIME` protects a database to be automatically unload in a limited time from the last access time.

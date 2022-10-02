@@ -18,7 +18,7 @@ function run_server(; host = Config.HOST, port = Config.PORT)
 
 		### cnp new analysis
 		route("/cnp/get_database", api_get_database),
-		route("/cnp/submit_job", api_new_analysis),
+		route("/cnp/submit_job_multi_db", api_new_analysis_multi_db),
 
 		### cnp create database
 		route("/cnp/check_database_name", api_validate_token, api_check_database_name),
@@ -32,9 +32,10 @@ function run_server(; host = Config.HOST, port = Config.PORT)
 		# route("/cnp/job_cancel", req -> api_validate_token(api_job_cancel, req)),
 
 		### cnp report
-		route("/cnp/report_query", api_report_query),
+		route("/cnp/multi_report_query", api_multi_report_query),
 		route("/cnp/file_viewer", api_file_viewer),
 		route("/cnp/quasar_table_viewer", req -> api_file_viewer(req, to_quasar_table=true)),
+		route("/cnp/classification_results_viewer", api_classification_results_viewer),
 
 		### cnp user
 		route("/cnp/analysis_list", api_validate_token, api_user_dir_list),

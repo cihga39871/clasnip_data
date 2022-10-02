@@ -19,11 +19,11 @@ module.exports = function (/* ctx */) {
     // --> boot files are part of "main.js"
     // https://quasar.dev/quasar-cli/boot-files
     boot: [
-      'auth',
-      'axios',
       'globalVariables',
+      'axios',
       'communication',
-      'helpText'
+      'helpText',
+      'auth',
       // 'global_variables_private'
     ],
 

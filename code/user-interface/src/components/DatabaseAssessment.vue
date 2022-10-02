@@ -1,16 +1,35 @@
 <template>
   <div class="q-pb-md">
 
-    <div class="text-subtitle1 text-primary q-pt-sm">
+    <div class="text-subtitle1 text-primary q-pt-sm q-pb-sm">
+      Metadata
+    </div>
+    <div class="row q-pb-md">
+      <div class="col-auto q-pr-lg">
+        <div class="row q-pb-sm"> Database ID </div>
+        <div class="row q-pb-sm"> Taxonomy </div>
+        <div class="row q-pb-sm"> Region </div>
+        <div class="row q-pb-sm"> Reference Sequence </div>
+        <div class="row q-pb-sm"> Created By </div>
+        <div class="row q-pb-sm"> Date Created </div>
+      </div>
+      <div class="col text-grey-9">
+        <div class="row q-pb-sm"> {{ dbName }} </div>
+        <div class="row q-pb-sm"> {{ taxonomyName }} ({{ taxonomyRank }}) </div>
+        <div class="row q-pb-sm"> {{ region }} ({{ dbType }}) </div>
+        <div class="row q-pb-sm"> {{ refGenome }} </div>
+        <div class="row q-pb-sm"> {{ owner }} </div>
+        <div class="row q-pb-sm"> {{ date }} </div>
+      </div>
+    </div>
+
+    <div class="text-subtitle1 text-primary q-pt-sm q-pb-sm">
       Classification Groups
     </div>
     <div class="row">
-      <div class="col-auto q-pr-lg"
-        v-for="group in Object.keys(groups).sort()"
-        :key="group"
-      >
-        {{ group }}
-      </div>
+        <div class="col-4 col-lg-3 q-pb-sm q-pt" v-for="group in Object.keys(groups).sort()" :key="group">
+          ⋅ {{ group.replace(/[^A-Za-z0-9]/g, " ") }}
+        </div>
     </div>
 
     <div v-if="dbAccuracy">
@@ -20,30 +39,8 @@
       <div class="text-body2">
         {{ (dbAccuracy * 100).toFixed(2) }}%
       </div>
-      <div class="text-caption text-grey q-mt-none">
+      <div class="text-caption text-grey q-mt-none q-pb-md">
         The classification accuracy computed based on the database samples
-      </div>
-    </div>
-
-    <div class="text-subtitle1 text-primary q-pt-sm">
-      Metadata
-    </div>
-    <div class="row q-pb-md">
-      <div class="col-auto q-pr-lg">
-        <div class="row"> Taxonomy </div>
-        <div class="row"> Region </div>
-        <div class="row"> Database ID </div>
-        <div class="row"> Reference Genome </div>
-        <!-- <div class="row"> Created By </div> -->
-        <!-- <div class="row"> Date Created </div> -->
-      </div>
-      <div class="col text-grey-9">
-        <div class="row"> {{ taxonomyName }} ({{ taxonomyRank }}) </div>
-        <div class="row"> {{ region }} ({{ dbType }}) </div>
-        <div class="row"> {{ dbName }} </div>
-        <div class="row"> {{ refGenome }} </div>
-        <!-- <div class="row"> {{ owner }} </div> -->
-        <!-- <div class="row"> {{ date }} </div> -->
       </div>
     </div>
 
@@ -57,10 +54,10 @@
         <q-btn
           @click="showDetails = false"
           class="full-width q-mb-md"
-          color="indigo-2"
+          color="indigo-5"
           dense
           outline
-          label="Hide Database Details"
+          label="Hide Classification Performance"
           icon="expand_less"
         />
 
@@ -207,8 +204,8 @@
         <q-btn
           @click="showDetails=false"
           class="full-width q-mt-sm"
-          color="indigo-2" dense outline
-          label="Hide Database Details"
+          color="indigo-5" dense outline
+          label="Hide Classification Performance"
           icon="expand_less"
         />
 
@@ -220,10 +217,10 @@
         v-if="!showDetails"
         @click="showDetails = downloadDetails = true"
         class="full-width"
-        color="indigo-2"
+        color="indigo-5"
         dense
         outline
-        label="Show Database Details"
+        label="Show Classification Performance"
         icon="expand_more"
       />
     </q-slide-transition>

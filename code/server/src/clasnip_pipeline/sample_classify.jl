@@ -1,17 +1,44 @@
 """
-    clasnip_classify(fasta::AbstractString, reference_genome::AbstractString, db_vcf::AbstractString; resume::Bool=true, clean::Bool=false, dir="")
+	clasnip_classify(fasta::AbstractString, reference_genome::AbstractString, db_vcf::AbstractString; resume::Bool = true, clean::Bool = false, log_file = nothing, fail_info_path = nothing, dir="")
 
 Clasnip pipeline for sample classification (from fasta to vcf). Return `Dict{String,Cmd}("VCF" => filepath::Cmd)`
+
+- `fail_info_path::Union{Nothing,AbstractString}`: if classification failed but can be handled, fail information will write to the file if it is not `nothing`.
 """
-function clasnip_classify(fasta::AbstractString, reference_genome::AbstractString, db_vcf::AbstractString; resume::Bool = true, clean::Bool = false, log_file = nothing, dir="")
+function clasnip_classify(fasta::AbstractString, reference_genome::AbstractString, db_vcf::AbstractString; resume::Bool = true, clean::Bool = false, log_file = nothing, fail_info_path = nothing, dir="")
+    @static if false
+        cd("/home/jc/ClasnipWebData/analysis/188e5fd3-8149-5d39-b4b8-8ecf07493196/analysis/clso_v5_16-23s")
+        resume = true
+		log_file = nothing
+        fasta = "seq.fasta"
+        reference_genome = "/home/jc/ClasnipWebData/database/clso_v5_16_23s/JX624236.1.23S.CLso-HA.fasta"
+        db_vcf = "/home/jc/ClasnipWebData/database/clso_v5_16_23s/database.jl-v1.7.2.db-vcf.reduced.jld2"
+
+        cd("/home/jc/test/Clasnip/data/test")
+        resume = true
+        fasta = "KY619992.1.16S.CLso-HE.fasta"
+        fasta = "JF811599.1.50S.CLso-HB.fasta"
+        fasta = "EU834131.1.50S.CLso-HA.fasta"
+        reference_genome = "/home/jc/test/Clasnip/data/GCA_000183665.1_ASM18366v1/GCA_000183665.1_ASM18366v1_genomic.fasta"
+        db_vcf = "/home/jc/test/Clasnip/data/CLso_genes/haplotypes/GCA_000183665.1_ASM18366v1_genomic.db-vcf.jld2"
+
+		cd("/mnt/raid1-1/jiacheng/CLso/sanger_sequencing-results_SCL-EC-4846-M5,M9")
+		resume = true
+		fasta = "A12_9R_1392.ab1.fa"
+		reference_genome = "/usr/database/processed/polychrome_classifier/genomes/Liberibacter/Candidatus_Liberibacter_solanacearum/HB/GCA_000183665.1_ASM18366v1/GCA_000183665.1_ASM18366v1_genomic.fasta"
+        db_vcf = "/usr/database/processed/CLso_genes/haplotypes/GCA_000183665.1_ASM18366v1_genomic.jl-v1.6.1.db-vcf.reduced.jld2"
+    end
 
 	if dir != ""
 		dir_backup = pwd()
 		cd(dir)
 	end
 
+	@info Pipelines.timestamp() * "clasnip_classify" fasta reference_genome db_vcf
+
 	run_args = (skip_when_done = resume, stdout = log_file, stderr = log_file, stdlog = log_file, append = true)
-    # fa 2 fq
+    
+	# fa 2 fq
     input_of_fa2fq = Dict("FASTA" => fasta)
 	success, output_of_fa2fq = run(program_fa2fq, input_of_fa2fq; run_args...)
 	# out: FASTQ
@@ -38,7 +65,7 @@ function clasnip_classify(fasta::AbstractString, reference_genome::AbstractStrin
 
     # vcf 2 mlst
     output_of_mlst, mlst, identity_res = Pipelines.redirect_to_files(log_file; mode="a+") do
-		clasnip_vcf2mlst(str(output_of_freebayes["VCF"]), db_vcf; resume = resume, identity_distribution_jld2 = identity_distribution_jld2)
+		clasnip_vcf2mlst(str(output_of_freebayes["VCF"]), db_vcf; resume = resume, identity_distribution_jld2 = identity_distribution_jld2, fail_info_path = fail_info_path)
 	end
 
 	if clean
@@ -60,30 +87,32 @@ function clasnip_classify(fasta::AbstractString, reference_genome::AbstractStrin
     return output_of_mlst
 end
 
-function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf::AbstractString; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing)
+function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf::AbstractString; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing, fail_info_path = nothing)
 
-	@info Pipelines.timestamp() * "Loading database for Clasnip SNP statistics." vcf_path
+	@info Pipelines.timestamp() * "clasnip_vcf2mlst: Loading database for Clasnip SNP statistics." vcf_path
 
     clasnip_load_database(db_vcf)
 
     db_vcf_parsed, groups, group_dict, nsample_group = clasnip_get_all(db_vcf);
 
-	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume, identity_distribution_jld2 = identity_distribution_jld2)
+	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume, identity_distribution_jld2 = identity_distribution_jld2, fail_info_path = fail_info_path)
 end
 
 function clasnip_vcf2mlst_with_cv_db(vcf_path::AbstractString, db_vcf_jld2_path_AB::AbstractString; db_reverse::Bool = false, outprefix = vcf_path * ".mlst", resume::Bool = true)
 
-	@info Pipelines.timestamp() * "Loading CV database for Clasnip SNP statistics." vcf_path
+	@info Pipelines.timestamp() * "clasnip_vcf2mlst_with_cv_db: Loading CV database for Clasnip SNP statistics." vcf_path
 
     # If run the function, the cv_db has been loaded already
-
-
     db_vcf_parsed, groups, group_dict, nsample_group = get_clasnip_cv_db_elements(db_vcf_jld2_path_AB, db_reverse);
+
+	if isnothing(db_vcf_parsed)
+		error("Nothing was returned in get_clasnip_cv_db_elements(\"$db_vcf_jld2_path_AB\", $db_reverse)")
+	end
 
 	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume)
 end
 
-function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, groups::Vector, group_dict::Dict, nsample_group::Dict; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing)
+function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, groups::Vector, group_dict::Dict, nsample_group::Dict; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing, fail_info_path = nothing)
 	@info Pipelines.timestamp() * "Started: Clasnip SNP statistics."
 
 	# outfiles
@@ -95,12 +124,20 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, gr
 
 	# loading input vcf file
 	@info Pipelines.timestamp() * "Loading mapped nucleotides."
-    input_vcf_all = vcf_load(vcf_path)
+    # input_vcf_all = vcf_load(vcf_path)
+    input_vcf_overlapped = ClasnipPipeline.vcf_load_overlapped(vcf_path, db_vcf_parsed)
+
 
 	# if input vcf file is empty, return empty
-	if isnothing(input_vcf_all)
-		@error Pipelines.timestamp() * "The sample had no coverage in the database! Analysis failed."
+	if isnothing(input_vcf_overlapped) || nrow(input_vcf_overlapped) == 0
+		fail_info = "The sample has no SNP matched in the database!"
+		@error Pipelines.timestamp() * fail_info
 
+		if !isnothing(fail_info_path)
+			open(fail_info_path, "w+") do io
+				println(io, fail_info)
+			end
+		end
 		mlst = empty(db_vcf_parsed)
 		mlst.SAMPLE = []
 		mlst.DEPTH = []
@@ -120,28 +157,26 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, gr
 		end
 	end
 
-	@info Pipelines.timestamp() * "Parsing mapped nucleotides."
-    select!(input_vcf_all, :CHROM, :POS, :ALT => :SAMPLE, :AD => :DEPTH)
-
-	yield()
-
 	@info Pipelines.timestamp() * "Selecting common variants."
 
 	# join mlst table with database table
-    mlst = innerjoin(db_vcf_parsed, input_vcf_all; on = [:CHROM, :POS])
+    mlst = innerjoin(db_vcf_parsed, input_vcf_overlapped; on = [:CHROM, :POS])
+	input_vcf_overlapped = nothing  # free
+
+	# filter out missing in mlst
+	filter!(r -> !( ismissing(r.SAMPLE) || ismissing(r.DEPTH) ), mlst)
 
 	@info Pipelines.timestamp() * "Writing the MLST table."
     # CSV.write(mlst_all_file, select(mlst, Not(:ALT2PROBs)); delim='\t')
 
     # filter: at least two haplotypes
-    filter!(:ALT2PROBs => d -> length(keys(d)) > 1, mlst)
+    filter!(:ALT2PROBs => d -> length(keys(d)) > 1, mlst)  #TODO: remove when all database contain the filtration.
     CSV.write(mlst_partial_file, select(mlst, Not(:ALT2PROBs)); delim='\t')
 
-	yield()
 	@info Pipelines.timestamp() * "Computing identity."
 
 	# compute identity for each group
-    identity_res = compute_identity(mlst, groups)
+    identity_res = @time ClasnipPipeline.compute_identity(mlst, groups)
 
 	# compute P value if identity_distribution_jld2 is not nothing
 	if !isnothing(identity_distribution_jld2)
@@ -152,17 +187,29 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, gr
 			@rtransform!(identity_res,
 		        :CDF = cumulated_density(identity_distributions, :GROUP, :PERCENT_MATCHED)
 		    )
+			# CDF can be NaN, convert to 0
+			for (irow, val) in enumerate(identity_res.CDF)
+				if isnan(val)
+					identity_res.CDF[irow] = 0
+				end
+			end
+
 			@info Pipelines.timestamp() * "Computing final probabilities."
 			@transform!(identity_res,
 				:PROBABILITY = value_normalize(:CDF)
 		    )
 		catch e
-			@error "Failed to compute CDF or probabilities." exception=e identity_distribution_jld2
+			@error Pipelines.timestamp() * "Failed to compute CDF or probabilities." exception=e identity_distribution_jld2
 		end
 	end
 
 	# save classification result file
-	identity_res |> CSV.write(identity_res_file; delim='\t')
+	CSV.write(identity_res_file, identity_res; delim='\t')
+
+	# analysis pass, remove fail_info file
+	if !isnothing(fail_info_path) && isfile(fail_info_path)
+		rm(fail_info_path)
+	end
 
 	@info Pipelines.timestamp() * "Finished: Clasnip SNP statistics."
 
@@ -178,25 +225,33 @@ function compute_identity(mlst::DataFrame, groups::Vector)
     n_snps = Vector{Float64}(undef, ngroup)  # all COVERED_SNP_SCORE
     n_ident_snps = Vector{Float64}(undef, ngroup)  # MATCHED_SNP_SCORE
     n_row = nrow(mlst)
+
+	# predefined ALTs to reduce LOTS of memory
+	predefined_alt_empty = Array{SubString{String},1}()
+	predefined_alt_dot = split(".", ",")
+
     mlst.ALTs = map(mlst.SAMPLE) do alt
         if length(alt) == 0
-            Array{SubString{String},1}()
+            predefined_alt_empty
         elseif alt[1] == '.'
-            split(alt, ",")
+            predefined_alt_dot
         else
             split(".," * alt, ",")
         end
+    end;
+
+	# predefined WEIGHTs to reduce LOTS of memory
+	predefined_weight_single = [1.0]
+
+	mlst.WEIGHTs = map(mlst.DEPTH) do depth
+		if occursin(',', depth)
+			depths = split(depth, ",")
+			vals = parse.(Float64, depths)
+			vals ./= sum(vals)
+		else
+			predefined_weight_single
+		end
     end
-
-	yield()
-
-    DEPTHs = split.(mlst.DEPTH, ",")
-    mlst.WEIGHTs = map(DEPTHs) do depths
-        vals = parse.(Int, depths)
-        val_weights = vals ./ sum(vals)
-    end
-
-	yield()
 
     for i = 1:ngroup
         group = groups[i]

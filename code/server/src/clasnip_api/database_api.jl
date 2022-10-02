@@ -22,6 +22,11 @@ function api_check_database_name(request)
     json_response(request, code, data = Dict("dbServerPath" => basename(db_server_path)))
 end
 
+"""
+    format_database_name(db_name::AbstractString)
+
+Change continuous special characters to `_`.
+"""
 function format_database_name(db_name::AbstractString)
     replace(db_name, r"[^A-Za-z0-9]+" => "_")
 end
@@ -30,13 +35,13 @@ function check_database_name(db_name_format::AbstractString)
     length(db_name_format) > 100 && (return 471) # value too long
     occursin(Config.VALIDATION_RULE_GENERAL, db_name_format) || (return 456) # invalid input
     # NOTE: replace special chars are important to avoid directory conflict in new analysis
-    db_name_format = lowercase(db_name_format)
+    db_name_format_lower = lowercase(db_name_format)
     existing_db_names = keys(CLASNIP_DB_INFO)
     for i in existing_db_names
-        i_format = lowercase(replace(i, r"[^A-Za-z0-9]+" => "_"))
-        if db_name_format == i_format
+        i_format_lower = lowercase((format_database_name(i)))
+        if db_name_format_lower == i_format_lower
             return 467
-        elseif StringDistances.Levenshtein()(db_name_format, i_format) < Config.DATABASE_NAME_DISTANCE
+        elseif StringDistances.Levenshtein()(db_name_format_lower, i_format_lower) < Config.DATABASE_NAME_DISTANCE
             return 475 # Name Similar to Existing Ones
         end
     end
@@ -201,7 +206,11 @@ function api_rm_draft_database(request)
         # change to an existing directory. It is necessary because sometimes pwd() throw an error when current directory is not exist when deleted a failed database dir, but still in this directory.
         cd(Config.PROJECT_ROOT_FOLDER)
 
-        rm(db_path, force=true,  recursive=true)
+        if Config.CLEAN_TMP_FILES
+            rm(db_path, force=true,  recursive=true)
+        else
+            @warn "api_rm_draft_database skip for $db_path (Config.CLEAN_TMP_FILES)"
+        end
         return json_response(request, 200)
     end
 end
@@ -303,6 +312,23 @@ end
 - `taxonomyRank`: one of "strain", "species", "genus". Invalid and missing 400.
 - `taxonomyName`: Missing: 400. Invalid: 456.
 
+# Example
+```julia
+data:
+  dbName: "clso_v5_genomic_clasnip2"
+  token: "lblgIOawzplKoaWKdH26K02D0OsNQpPVNbgVAMH5ZVCc7CuFjSM"
+  refGenome:
+    valid: true
+    basename: "GCA_000183665.1_ASM18366v1_genomic.fasta"
+    filepath: "/CLso_12haplotypes_corrected5/B/GCA_000183665.1_ASM18366v1_genomic.fasta"
+    group: "B"
+  taxonomyRank: "species"
+  username: "cihga39871"
+  dbType: "genomic"
+  region: "genomic"
+  taxonomyName: "CLso"
+  dbServerPath: "clso_v5_genomic_clasnip2"
+```
 """
 function api_create_database(request)
     data = try
@@ -310,7 +336,6 @@ function api_create_database(request)
     catch
         return json_response(request, 400)
     end
-
     # change to an existing directory. It is necessary because sometimes pwd() throw an error when current directory is not exist when deleted a failed database dir, but still in this directory.
     cd(Config.PROJECT_ROOT_FOLDER)
 
@@ -396,21 +421,23 @@ function api_create_database(request)
 
     # finish checking
 
-    # prepare arguments
-    fastas = [f.filepath for f in fas]
-    labels = [f.group * "/" * f.basename for f in fas]
-    db_prefix = joinpath(db_path, "database.jl-v$VERSION.db-vcf")
 
-    # build bowtie2 ref
-    ref = joinpath(db_path, basename(ref_origin))
-    cp(ref_origin, ref, force=true, follow_symlinks=true)
-    run(`samtools faidx $ref`) # cannot use gzip/bgzip, freebayes not compatible
-    build_bowtie2_index(ref)
 
     # submit job
 
-    db_build_job = Job(; name = "Main DB Build: $db_name", user = owner) do
-        db_wrapper_job = clasnip_db_build(fastas, labels, ref, db_prefix, working_dir = db_path, user = owner, do_cross_validation = do_cross_validation)
+    db_build_job = Job(; name="Main DB Build: $db_name", user=owner) do
+        # prepare arguments
+        fastas = [f.filepath for f in fas]
+        labels = [f.group * "/" * f.basename for f in fas]
+        db_prefix = joinpath(db_path, "database.jl-v$VERSION.db-vcf")
+
+        # build ref fasta index
+        ref = joinpath(db_path, basename(ref_origin))
+        cp(ref_origin, ref, force=true, follow_symlinks=true)
+        
+        build_bowtie2_index(ref) # as well as samtools fai index
+
+        db_wrapper_job = clasnip_db_build(fastas, labels, ref, db_prefix, working_dir=db_path, user=owner, do_cross_validation=do_cross_validation)
 
         while db_wrapper_job.state in (QUEUING, RUNNING)
             sleep(2)
@@ -424,9 +451,9 @@ function api_create_database(request)
             end
             register_job = Job(
                 @task(register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type, region, taxonomy_rank, taxonomy_name, date)),
-                name = "Register Database: $db_name",
-                user = owner,
-                dependency = [DONE => last_job.id]
+                name="Register Database: $db_name",
+                user=owner,
+                dependency=[DONE => last_job]
             )
             submit!(register_job)
             return register_job
@@ -444,11 +471,11 @@ function api_create_database(request)
     #     @task(rm(db_path, force=true,  recursive=true)),
     #     name = "Clean Failed Database: $db_path",
     #     user = owner,
-    #     dependency = [CANCELLED => job.id]
+    #     dependency = [CANCELLED => job]
     # )
     # submit!(job_clean_failed)
 
-    return json_response(request, 200, data = Dict(
+    return json_response(request, 200, data=Dict(
         "jobID" => db_build_job.id
     ))
 end
@@ -494,6 +521,8 @@ function register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type
     # remove tmp
     if Config.CLEAN_TMP_FILES
         ClasnipApi.remove_database_tmpfiles(db_path)
+    else
+        @warn "remove_database_tmpfiles skip for $db_path (Config.CLEAN_TMP_FILES)"
     end
 end
 
@@ -511,6 +540,9 @@ function count_groups(fas::Vector{ClasnipApi.DbFasta})
 end
 
 function remove_database_tmpfiles(db_path)
+    if !Config.CLEAN_TMP_FILES
+        @warn "remove_database_tmpfiles skip for $db_path (Config.CLEAN_TMP_FILES)"
+    end
     to_rm = [
         "database.jl-v$VERSION.db-vcf",
         "database.jl-v$VERSION.db-vcf.jld2",

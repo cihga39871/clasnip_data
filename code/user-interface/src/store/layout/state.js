@@ -9,8 +9,13 @@ export default function () {
       },
       {
         title: 'Reports',
-        icon: 'analytics',
+        icon: 'summarize',
         link: '/analysis/reports'
+      },
+      {
+        title: 'Database Information',
+        icon: 'assessment',
+        link: '/analysis/database_info'
       },
       {
         title: 'Create Database',
@@ -30,7 +35,7 @@ export default function () {
 
     userLinks: [
       {
-        title: 'User',
+        title: 'User Space',
         icon: 'person',
         link: '/user',
         isHidden: true

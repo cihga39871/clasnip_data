@@ -23,4 +23,4 @@ then
 fi
 # nthread=`echo "20+$nthread" | bc`
 echo "Clasnip server with $nthread threads."
-julia --project=. --threads=$nthread -i --banner=no --color=yes start_server.jl "$@"
+julia --project=. --threads=$nthread -i --banner=no start_server.jl "$@"

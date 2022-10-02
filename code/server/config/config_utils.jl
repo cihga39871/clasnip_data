@@ -14,6 +14,12 @@ end
 function logging_request_body(b::Bool)
     global LOGGING_REQUEDT_BODY = b
 end
+function job_logs_to_std(b::Bool)
+    global JOB_LOGS_TO_STD = b
+end
+function clean_tmp_files(b::Bool)
+    global CLEAN_TMP_FILES = b
+end
 
 """
     isdev()

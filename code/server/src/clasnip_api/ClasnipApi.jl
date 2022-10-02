@@ -33,16 +33,17 @@ export file_locate
 include("db_info.jl")
 export is_valid_clasnip_db_info,
 add_clasnip_db_info, delete_clasnip_db_info,
-init_clasnip_db_info
+init_clasnip_db_info, api_get_database, 
+get_db_info, get_user_friendly_db_name
 
 include("new_analysis_api.jl")
-export api_get_database, api_new_analysis
+export api_new_analysis, api_new_analysis_multi_db
 
 include("report_api.jl")
-export api_report_query
+export api_report_query, api_multi_report_query
 
 include("file_viewer_api.jl")
-export api_file_viewer
+export api_file_viewer, api_classification_results_viewer
 
 include("database_api.jl")
 export api_check_database_name, api_rm_draft_database, api_upload_database, api_create_database

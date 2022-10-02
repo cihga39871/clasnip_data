@@ -1,6 +1,11 @@
 <template>
   <q-page padding>
     <div>
+
+      <div class="q-pb-md q-pt-sm text-h6 text-blue">
+        Clasnip User Space
+      </div>
+
       <q-card class="q-mb-lg" flat>
 
       <!-- Your Analysis -->

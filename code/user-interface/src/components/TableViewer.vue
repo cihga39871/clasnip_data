@@ -6,7 +6,7 @@
     >
       <q-card-section :class="flat ? 'text-primary q-py-none q-pl-none' : 'text-primary q-py-none bg-grey-2'">
         <div class="row">
-          <div class="col q-py-md">
+          <div class="col">
             <span class="text-subtitle1">{{ label === 'auto' ? baseName(link) : label }}</span>
             <span v-if="help">
               <q-btn round size="sm" dense flat icon="help" color="grey" @click="helpPopUp = true" />
@@ -23,21 +23,36 @@
                 @click="download(link)"
               />
             </span>
+            <div class="text-subtitle2 text-secondary" v-if="subtitle.length > 0" >{{ subtitle }}</div>
+            <div v-else class="q-pb-md"></div>
           </div>
 
-          <div class="col-2 q-pt-sm q-mt-xs q-pr-sm" v-if="fileData !== null">
+          <div class="col-3 q-pr-sm" v-if="fileData !== null && isClassificationSummary">
+            <q-select
+              label="Groups to compare"
+              v-model="groupsToCompare"
+              :options=groupOptions
+              outlined
+              dense options-dense
+              multiple
+              popup-content-class="q-py-none"
+              :display-value="(groupsToCompare.length == fileData.row_data.length ? 'All' : groupsToCompare.length) + ' groups'"
+            />
+          </div>
+
+          <div class="col-2 q-pr-sm" v-if="fileData !== null">
             <q-input
               v-if="filter"
               outlined
               dense
-              v-model="filterValue"
+              v-model="localFilterValue"
               :label="filterLabel"
             />
           </div>
 
-          <div class="col-2 q-pt-sm q-mt-xs" v-if="fileData !== null">
+          <div class="col-2" v-if="fileData !== null">
             <q-select
-              v-if="rowData.length > 0"
+              v-if="fileData !== null"
               v-model="visibleColumns"
               multiple
               outlined
@@ -74,14 +89,14 @@
                 :row-key="row => row.name"
               />
           </div>
-          <div v-else-if="!checkClassificationSummary" class="text-grey">
+          <div v-else-if="!isClassificationSummary" class="text-grey">
             <span>
               <q-icon name="warning" />
               No data available.
             </span>
           </div>
 
-          <div v-if="checkClassificationSummary" class="q-gutter-sm">
+          <div v-if="isClassificationSummary" class="q-gutter-sm">
 
             <div v-if="rowData.length == this.fileData.row_data.length" class="text-green">
               <span>
@@ -93,7 +108,7 @@
             <div v-if="rowData.length == 0" class="text-negative">
               <span>
                 <q-icon name="warning" />
-                The sample is not classified to any group under the given P value ({{filterValue}}). Please decrease P value threshold, and check possible sequencing errors.
+                The sample is not classified to any group under the given PROBABILITY ({{localFilterValue}}). Please decrease the PROBABILITY threshold, and check possible sequencing errors.
               </span>
             </div>
 
@@ -109,6 +124,9 @@
         </q-card-section>
 
       </q-slide-transition>
+
+      <div class="q-pb-md">
+      </div>
 
       <q-dialog v-model="helpPopUp">
         <q-card>
@@ -133,12 +151,17 @@ export default {
   name: 'TableViewer',
   props: {
     link: {
+      // if isClassificationSummary, can provide multiple links and join them with seperater :
       type: String,
       required: true
     },
     label: {
       type: String,
       default: 'auto'
+    },
+    subtitle: {
+      type: String,
+      default: ''
     },
     height: {
       default: 0
@@ -169,6 +192,7 @@ export default {
     hideCols: {
       default: function () { return [] }
     },
+    // filter...: user can filter a column named 'filterColName'
     filter: {
       type: Boolean,
       default: false
@@ -194,7 +218,7 @@ export default {
       default: false,
       type: Boolean
     },
-    checkClassificationSummary: {
+    isClassificationSummary: {
       type: Boolean,
       default: false
     }
@@ -207,14 +231,18 @@ export default {
       visibleColumns: null,
       helpPopUp: false,
       hideWhenFail: this.autoLoad,
-      fail: false
+      fail: false,
+      localFilterValue: this.filterValue,
+      groupsToCompare: [],
+      groupOptions: []
     }
   },
   methods: {
     download: function (link) {
+      const apiPath = this.isClassificationSummary ? '/cnp/classification_results_viewer' : '/cnp/quasar_table_viewer'
       this.$axios
         .post(
-          this.MUX_URL + '/cnp/quasar_table_viewer',
+          this.MUX_URL + apiPath,
           JSON.stringify({
             token: localStorage.getItem('token'),
             username: localStorage.getItem('username'),
@@ -224,6 +252,9 @@ export default {
         .then(response => {
           this.fileData = response.data
           this.formatData()
+          if (this.isClassificationSummary) {
+            this.initGroupOptions()
+          }
           this.filterRowData()
           this.filterCols()
           this.fail = false
@@ -247,12 +278,22 @@ export default {
         this.fileData.columns[idx].label = row.label.replaceAll('_', ' ')
       })
     },
+    initGroupOptions: function () {
+      this.groupOptions = this.fileData.row_data.map(r => {
+        return r.col1
+      })
+      this.groupsToCompare = this.groupOptions
+    },
     filterRowData: function () {
       if (this.filter) {
         this.rowData = []
         this.fileData.row_data.forEach(row => {
-          if (this.filterMethod(row[[this.filterColName]], this.filterValue)) {
-            this.rowData.push(row)
+          if (this.filterMethod(row[[this.filterColName]], this.localFilterValue)) {
+            if (this.isClassificationSummary && this.groupsToCompare.includes(row.col1)) {
+              this.rowData.push(row)
+            } else if (!this.isClassificationSummary) {
+              this.rowData.push(row)
+            }
           }
         })
       } else {
@@ -305,9 +346,37 @@ export default {
     filterValue: function () {
       if (parseFloat(this.filterValueMin) && parseFloat(this.filterValue) < parseFloat(this.filterValueMin)) {
         this.filterValue = parseFloat(this.filterValueMin)
+        this.localFilterValue = this.filterValue
       } else if (parseFloat(this.filterValueMax) && parseFloat(this.filterValue) > parseFloat(this.filterValueMax)) {
         this.filterValue = parseFloat(this.filterValueMax)
+        this.localFilterValue = this.filterValue
       }
+      this.filterRowData()
+    },
+    localFilterValue: function () {
+      if (parseFloat(this.filterValueMin) && parseFloat(this.localFilterValue) < parseFloat(this.filterValueMin)) {
+        this.localFilterValue = parseFloat(this.filterValueMin)
+      } else if (parseFloat(this.filterValueMax) && parseFloat(this.localFilterValue) > parseFloat(this.filterValueMax)) {
+        this.localFilterValue = parseFloat(this.filterValueMax)
+      }
+      this.filterRowData()
+    },
+    groupsToCompare: function () {
+      // For classification summary only!!
+      // Re-compute Probability based on sum of selected groups' CDF
+      var sumCDF = 0
+      this.fileData.row_data.forEach(r => {
+        if (this.groupsToCompare.includes(r.col1)) {
+          sumCDF += r.col5
+        }
+      })
+      this.fileData.row_data.forEach(r => {
+        if (sumCDF > 0) {
+          r.col6 = (r.col5 / sumCDF).toFixed(3)
+        } else {
+          r.col6 = 0
+        }
+      })
       this.filterRowData()
     }
   }

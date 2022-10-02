@@ -36,6 +36,16 @@
         </div>
 
         <div class="col-auto flex justify-center q-pb-lg q-px-sm">
+          <q-btn outline color="orange-6" no-caps stack to="analysis/database_info" class="btn-fixed-width">
+            <div>CLASNIP DATABASES</div>
+            <q-tooltip content-class="bg-orange-7 text-white shadow-4" :offset="[10, 10]">
+              <div class="text-caption">Browse Clasnip database information,</div>
+              <div class="text-caption">including classification statistics.</div>
+            </q-tooltip>
+          </q-btn>
+        </div>
+
+        <div class="col-auto flex justify-center q-pb-lg q-px-sm">
           <q-btn outline color="green-6" no-caps stack @click="goToCreateDb" class="btn-fixed-width">
             <div>CREATE DATABASE</div>
             <q-tooltip content-class="bg-green-7 text-white shadow-4" :offset="[10, 10]">

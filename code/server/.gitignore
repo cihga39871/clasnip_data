@@ -4,3 +4,6 @@
 config/config.secret.jl
 config/dynamic_key.txt
 db/*
+
+Manifest.toml
+

@@ -29,19 +29,25 @@ const routes = [
       },
 
       {
+        path: 'database_info',
+        component: () => import('pages/DatabaseInfo.vue'),
+        meta: { requiresAuth: false }
+      },
+
+      {
+        path: 'database_info/:dbName',
+        component: () => import('pages/DatabaseInfo.vue'),
+        meta: { requiresAuth: false }
+      },
+
+      {
         path: 'reports',
         component: () => import('pages/Reports.vue'),
         meta: { requiresAuth: false }
       },
 
       {
-        path: 'reports/:jobName',
-        component: () => import('pages/Reports.vue'),
-        meta: { requiresAuth: false }
-      },
-
-      {
-        path: 'reports/:query1//:query2',
+        path: 'reports/:queryString',
         component: () => import('pages/Reports.vue'),
         meta: { requiresAuth: false }
       },

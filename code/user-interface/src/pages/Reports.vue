@@ -1,5 +1,9 @@
 <template>
   <div class="q-pa-md">
+    <div class="q-pb-md q-pt-sm text-h6 text-blue">
+      Clasnip Classification Reports
+    </div>
+
     <q-slide-transition>
       <q-banner v-if="!dismissBanner && hasLogin" dense class="bg-green-2 q-mb-md" rounded>
         <template v-slot:avatar>
@@ -8,7 +12,7 @@
         Forget Job ID? You can view your previous analyses on User page.
         <template v-slot:action>
           <q-btn flat color="green-5" label="Dismiss" @click="dismissBanner=true"/>
-          <q-btn flat color="green-8" label="Go to User Page" @click="goTo('/user')"/>
+          <q-btn flat color="green-8" label="Go to User Space" @click="goTo('/user')"/>
         </template>
       </q-banner>
     </q-slide-transition>
@@ -33,7 +37,7 @@
           Report Query
         </div>
 
-        <q-input outlined bottom-slots v-model="queryString" label="Job ID" dense style="font-family:monospace">
+        <q-input outlined bottom-slots v-model="queryString" label="Job ID" dense style="font-family:monospace" v-on:keyup.enter="reportQuery()">
           <template v-slot:append>
             <q-icon v-if="queryString !== ''" name="close" @click="queryString = ''" class="cursor-pointer" />
           </template>
@@ -41,7 +45,7 @@
           <template v-slot:hint>
             <span style="font-family:Roboto">
             Job ID is provided after job submission in this format:</span>
-            000000000000000//12345678-90ab-cdef-1234-567890abcdef.database_name
+            000000.999999//12345678-90ab-cdef-1234-567890abcdef.database1.database2
           </template>
 
           <template v-slot:after>
@@ -53,39 +57,110 @@
 
     <q-slide-transition>
       <div v-if="showReports">
-        <div class="q-pt-md q-pb-sm text-subtitle1 text-primary" v-if="jobState != 'unknown'">
-            Job status
-          <q-badge :color="jobStateColor">
-            {{ jobState }}
-          </q-badge>
-        </div>
+        <div v-if="jobs.length > 0" class="q-pb-md">
 
-        <div class="row">
-          <div v-if="reports.classificationResult" class="col q-pb-md">
-            <table-viewer
-              :link="reports.classificationResult"
-              label="Classification Summary"
-              checkClassificationSummary
-              autoLoad
-              flat
-              help
-              helpTitle="Explanation"
-              :helpHtml="helpClassificationSummary"
-              filter
-              filterColName="col6"
-              :filterValue="probability"
-              :filterValueMin="0"
-              :filterValueMax="1.0"
-              filterLabel="Show probability ≥"
+          <div class="row q-pt-md q-pb-sm text-subtitle1 text-primary" >
+            Job status
+          </div>
+
+          <div v-for="job in jobs" v-bind:key="job.id" class="row">
+            <job-chip
+              :id="job.id"
+              :name="job.name"
+              :state="job.state"
+              :user="job.user"
+              :createTime="job.create_time"
+              :startTime="job.start_time"
+              :stopTime="job.stop_time"
             />
           </div>
         </div>
 
-        <div class="row">
-          <div v-if="reports.mlstTable" class="col q-pb-md">
+        <div class="q-pb-md q-pt-md" v-if="classificationResults.length > 1">
+          <q-banner dense class="bg-blue-2 q-mb-md" rounded>
+            <template v-slot:avatar>
+              <q-icon name="info" color="primary" />
+            </template>
+            The sample is compared against multiple databases. Do you want to combine or seperate the classification summary?
+            <template v-slot:action>
+              <span class="text-grey-8 text-caps">SEPERATE</span>
+              <q-toggle v-model="combineClassificationResults" />
+              <span class="text-primary text-caps q-pr-md">COMBINE</span>
+            </template>
+          </q-banner>
+        </div>
+
+        <div v-if="failInfo.length > 0" class="q-pb-md">
+          <div class="row q-pt-md q-pb-sm text-subtitle1 text-primary" >
+            Classification Error Infomation
+          </div>
+
+          <div v-for="failText in failInfo" v-bind:key="failText">
+            <div class="row q-pb-sm text-red">
+              ⋅ {{ failText }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="classificationResults.length > 0">
+          <q-slide-transition>
+            <div v-show="combineClassificationResults">
+              <div class="row">
+                <div class="col q-pb-md">
+                  <table-viewer
+                    :link="classificationResults.join(':')"
+                    label="Classification Summary"
+                    subtitle="Multiple databases"
+                    isClassificationSummary
+                    autoLoad
+                    flat
+                    help
+                    helpTitle="Explanation"
+                    :helpHtml="helpClassificationSummary"
+                    filter
+                    filterColName="col6"
+                    :filterValue="probability"
+                    :filterValueMin="0"
+                    :filterValueMax="1.0"
+                    filterLabel="Show probability ≥"
+                  />
+                </div>
+              </div>
+            </div>
+          </q-slide-transition>
+          <q-slide-transition>
+            <div v-show="!combineClassificationResults">
+              <div class="row" v-for="classificationResult in classificationResults" v-bind:key="classificationResult">
+                <div class="col q-pb-md">
+                  <table-viewer
+                    :link="classificationResult"
+                    label="Classification Summary"
+                    :subtitle="getDbName(classificationResult)"
+                    isClassificationSummary
+                    autoLoad
+                    flat
+                    help
+                    helpTitle="Explanation"
+                    :helpHtml="helpClassificationSummary"
+                    filter
+                    filterColName="col6"
+                    :filterValue="probability"
+                    :filterValueMin="0"
+                    :filterValueMax="1.0"
+                    filterLabel="Show probability ≥"
+                  />
+                </div>
+              </div>
+            </div>
+          </q-slide-transition>
+        </div>
+
+        <div class="row q-pb-md" v-for="mlstTable in mlstTables" v-bind:key="mlstTable">
+          <div class="col">
             <table-viewer
-              :link="reports.mlstTable"
+              :link="mlstTable"
               label="Multi Locus Sequence Typing (MLST)"
+              :subtitle="getDbName(mlstTable)"
               height=0
               flat
               help
@@ -107,14 +182,15 @@
           </div>
         </div>
 
-        <div class="row q-pt-sm">
-          <div v-if="reports.log" class="col">
+        <div class="row q-pt-md q-pb-md" v-for="log in logs" v-bind:key="log">
+          <div class="col">
             <file-viewer
-              :link="reports.log"
+              :link="log"
               label="Log Info"
+              :subtitle="getDbName(log)"
               format="log"
               flat
-              :allowReload="jobState === 'running'"
+              :allowReload="false"
             />
           </div>
         </div>
@@ -126,10 +202,11 @@
 <script>
 import FileViewer from '../components/FileViewer.vue'
 import TableViewer from '../components/TableViewer.vue'
+import JobChip from '../components/JobChip.vue'
 // import HtmlViewer from '../components/HtmlViewer.vue'
 
 export default {
-  components: { FileViewer, TableViewer },
+  components: { FileViewer, TableViewer, JobChip },
   name: 'Reports',
 
   data () {
@@ -137,15 +214,20 @@ export default {
       hasLogin: false,
       dismissBanner: true,
 
-      queryInfo: null,
-      jobID: null,
-      jobName: null,
       queryString: '',
 
       showReports: false,
       reports: null,
-      jobState: 'unknown',
-      jobStateColor: 'warning',
+      databaseOptions: [],
+      // jobState: 'unknown',
+      // jobStateColor: 'warning',
+
+      jobs: [],
+      logs: [],
+      classificationResults: [],
+      combineClassificationResults: false,
+      mlstTables: [],
+      failInfo: [],
 
       probability: 0.05,
 
@@ -155,31 +237,31 @@ export default {
     }
   },
 
+  // 3269715850055321.3269715850202822//5a71dd67-12c4-535b-bb08-adc3c6ecd91a.CLso_16s_test.clso_50s
   created () {
     this.hasLogin = this.hasToken()
 
-    if (this.$route.params.jobName) {
-      this.jobName = this.$route.params.jobName
-      this.jobID = ''
-      this.queryInfo = { jobID: '', jobName: this.jobName, queryString: this.jobName }
-      this.queryString = this.jobName
+    if (this.$route.params.queryString) {
+      this.queryString = this.$route.params.queryString
       this.dismissBanner = true
       this.reportQuery()
     } else {
-      this.queryInfo = this.getJob()
-      this.jobID = this.queryInfo.jobID
-      this.jobName = this.queryInfo.jobName
-      this.queryString = this.queryInfo.queryString
+      this.queryString = this.getJobQueryString()
       this.dismissBanner = false
     }
   },
 
   watch: {
+    jobs: { handler (n, o) { }, deep: true },
+    logs: { handler (n, o) { }, deep: true },
+    classificationResults: { handler (n, o) { }, deep: true },
+    mlstTables: { handler (n, o) { }, deep: true },
+    failInfo: { handler (n, o) { }, deep: true }
   },
 
   methods: {
     reportQuery: function () {
-      this.$axios.post(this.MUX_URL + '/cnp/report_query', JSON.stringify({
+      this.$axios.post(this.MUX_URL + '/cnp/multi_report_query', JSON.stringify({
         token: localStorage.getItem('token'),
         username: localStorage.getItem('username'),
         queryString: this.queryString
@@ -189,43 +271,34 @@ export default {
           this.notifyInfo('Reports found.')
 
           this.showReports = true
-          var jobName = this.queryString.match(/[0-9a-f]{8}-.*/)
-          jobName = jobName === null ? '' : jobName[0]
-          var jobID = this.queryString.match(/^[0-9]{10,}/)
-          jobID = jobID === null ? '' : jobID[0]
-          this.updateJob(jobID, jobName)
+          this.updateJobQueryString(this.queryString) // to local storage
         })
         .catch((error) => {
           this.showReports = false
           this.notifyError(error)
         })
+
+      this.updateDbOptions(x => { this.databaseOptions = x })
     },
 
     updateReports: function (data) {
       this.reports = data
-      if (data.job) {
-        this.jobState = data.job.state
-        switch (this.jobState) {
-          case 'done':
-            this.jobStateColor = 'positive'
-            break
-          case 'failed':
-            this.jobStateColor = 'negative'
-            break
-          case 'cancelled':
-            this.jobStateColor = 'negative'
-            break
-          default:
-            this.jobStateColor = 'warning'
+      this.jobs = data.jobs
+      this.logs = data.logs
+      this.classificationResults = data.classificationResults
+      this.mlstTables = data.mlstTables
+      this.failInfo = data.classificationFailInfo
+    },
+
+    getDbName: function (path) {
+      const formattedDbName = path.split('/').reverse()[1]
+      for (let index = 0; index < this.databaseOptions.length; index++) {
+        const element = this.databaseOptions[index]
+        if (element.formattedDbName === formattedDbName) {
+          return element.dbInfo.taxonomyName + ' (' + element.dbInfo.region + ') '
         }
-        // if (this.queryString.match('^[0-9]+/*$') && this.jobState === 'queuing') {
-        //   // If building database, it has many jobs to run, but only the last job is given to user. Prerequisite jobs may be running, but we do not know.
-        //   this.jobState = 'queuing or running'
-        // }
-      } else {
-        this.jobState = 'unknown'
-        this.jobStateColor = 'warning'
       }
+      return formattedDbName
     },
 
     goTo: function (routerLink) {

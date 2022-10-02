@@ -1,10 +1,45 @@
+mutable struct ClasnipDb
+    const db_vcf_jld2_path::String
+    const db_vcf_parsed::DataFrame
+    const groups::Vector{String}
+    const group_dict::Dict{String, Vector{String}}
+    const nsample_group::Dict{String, Int64}
+    access_time::DateTime
+    memory_size::Int
+end
+
+function Base.empty!(db::ClasnipDb)
+    empty!(db.db_vcf_parsed)
+    empty!(db.groups)
+    for (k,v) in db.group_dict
+        empty!(v)
+    end
+    empty!(db.group_dict)
+    empty!(db.nsample_group)
+    nothing
+end
+
+function Base.empty!(vv::Vector{Vector})
+    # this is useful when empty Dict{T,Vector{Vector}}, eg db.ALT2PROBs
+    for v in vv
+        empty!(v)
+    end
+    empty!(vv)
+end
+function Base.empty!(vv::Dict{T, Vector}) where T
+    # this is useful when empty Dict{T,Vector{Vector}}, eg db.ALT2PROBs
+    for (k,v) in vv
+        empty!(v)
+    end
+    empty!(vv)
+end
 
 """
-    CLASNIP_DB = Dict{String, Any}(
+    CLASNIP_DB = Dict{String, ClasnipDb}(
         db_vcf_jld2_path => [db_mlst, groups, group_dict, nsample_group, last_modified::DateTime, memory_in_bytes::Int]
     )
 """
-CLASNIP_DB = Dict{String, Any}()
+CLASNIP_DB = Dict{String, ClasnipDb}()
 CLASNIP_DB_LOADING = Dict{String, Bool}()
 CLASNIP_DB_LOAD_LOCK = SpinLock()
 function wait_for_lock(lock::SpinLock)
@@ -26,7 +61,6 @@ end
 function clasnip_load_database(db_vcf_jld2_path::AbstractString; reload::Bool=false)
     global CLASNIP_DB
 
-    # db_vcf_jld2_path = "/home/jc/test/Clasnip/data/CLso_genes/haplotypes/GCA_000183665.1_ASM18366v1_genomic.db-vcf.jld2"
     (!reload && haskey(CLASNIP_DB, db_vcf_jld2_path)) && return nothing
 
     # check whether other program is loading
@@ -37,11 +71,24 @@ function clasnip_load_database(db_vcf_jld2_path::AbstractString; reload::Bool=fa
 
         # start loading
         @load db_vcf_jld2_path db_vcf_parsed groups group_dict nsample_group
-        db_mlst = parsed_db_vcf_to_mlst(db_vcf_parsed::DataFrame, groups::Vector)
-        CLASNIP_DB[db_vcf_jld2_path] = [db_mlst, groups, group_dict, nsample_group, now(), 0]
+        
+        db_vcf_parsed = parsed_db_vcf_to_mlst!(db_vcf_parsed::DataFrame, groups::Vector)
+        ClasnipPipeline.unique_reference_for_db_vcf_parsed!(db_vcf_parsed) # reduce memory usage to 60%
+
+        estimated_db_size = filesize(db_vcf_jld2_path) * 2
+        clasnip_db = ClasnipDb(db_vcf_jld2_path, db_vcf_parsed, groups, group_dict, nsample_group, now(), estimated_db_size)
+        CLASNIP_DB[db_vcf_jld2_path] = clasnip_db
 
         # Compute the amount of memory, in bytes
-        CLASNIP_DB[db_vcf_jld2_path][6] = Base.summarysize(CLASNIP_DB[db_vcf_jld2_path])
+        
+        # estimate memory size replaced by 
+        #     estimated_db_size = filesize(db_vcf_jld2_path) * 2. 
+        # because Base.summarysize will use more momory!
+        # job_compute_memory_size = Job(name = "Memory Size: $db_id") do 
+        #     clasnip_db.memory_size = Base.summarysize(clasnip_db)
+        #     nothing
+        # end
+        # submit!(job_compute_memory_size)
     catch e
         @error Pipelines.timestamp() * "Fail to load clasnip database: $db_vcf_jld2_path" exception=e
     finally
@@ -59,13 +106,14 @@ function clasnip_unload_database(db_vcf_jld2_path::AbstractString)
 
     ret = try
         if haskey(CLASNIP_DB, db_vcf_jld2_path)
+            empty!(CLASNIP_DB[db_vcf_jld2_path])
             delete!(CLASNIP_DB, db_vcf_jld2_path)
             true
         else
             false
         end
     catch e
-        @error "clasnip_unload_database: $db_vcf_jld2_path" exception=(e, catch_backtrace())
+        @error Pipelines.timestamp() * "clasnip_unload_database: $db_vcf_jld2_path" exception=(e, catch_backtrace())
         false
     finally
         unlock(CLASNIP_DB_LOAD_LOCK);
@@ -75,68 +123,59 @@ end
 
 function clasnip_get_db(db_vcf_jld2_path::AbstractString)
     global CLASNIP_DB
-    wait_for_lock(CLASNIP_DB_LOAD_LOCK)
-
-    if !haskey(CLASNIP_DB, db_vcf_jld2_path)
-        unlock(CLASNIP_DB_LOAD_LOCK);
-        return nothing
+    wait_for_lock(CLASNIP_DB_LOAD_LOCK) do
+        if !haskey(CLASNIP_DB, db_vcf_jld2_path)
+            return nothing
+        end
+        clasnip_db = CLASNIP_DB[db_vcf_jld2_path]
+        clasnip_db.access_time = now()
+        clasnip_db.db_vcf_parsed
     end
-    CLASNIP_DB[db_vcf_jld2_path][5] = now()
-    res = CLASNIP_DB[db_vcf_jld2_path][1]
-    unlock(CLASNIP_DB_LOAD_LOCK);
-    return res
 end
 function clasnip_get_groups(db_vcf_jld2_path::AbstractString)
     global CLASNIP_DB
-    wait_for_lock(CLASNIP_DB_LOAD_LOCK)
-
-    if !haskey(CLASNIP_DB, db_vcf_jld2_path)
-        unlock(CLASNIP_DB_LOAD_LOCK);
-        return nothing
+    wait_for_lock(CLASNIP_DB_LOAD_LOCK) do
+        if !haskey(CLASNIP_DB, db_vcf_jld2_path)
+            return nothing
+        end
+        clasnip_db = CLASNIP_DB[db_vcf_jld2_path]
+        clasnip_db.access_time = now()
+        clasnip_db.groups
     end
-    CLASNIP_DB[db_vcf_jld2_path][5] = now()
-    res = CLASNIP_DB[db_vcf_jld2_path][2]
-    unlock(CLASNIP_DB_LOAD_LOCK);
-    return res
 end
 function clasnip_get_group_dict(db_vcf_jld2_path::AbstractString)
     global CLASNIP_DB
-    wait_for_lock(CLASNIP_DB_LOAD_LOCK)
+    wait_for_lock(CLASNIP_DB_LOAD_LOCK) do
 
-    if !haskey(CLASNIP_DB, db_vcf_jld2_path)
-        unlock(CLASNIP_DB_LOAD_LOCK);
-        return nothing
+        if !haskey(CLASNIP_DB, db_vcf_jld2_path)
+            return nothing
+        end
+        clasnip_db = CLASNIP_DB[db_vcf_jld2_path]
+        clasnip_db.access_time = now()
+        clasnip_db.group_dict
     end
-    CLASNIP_DB[db_vcf_jld2_path][5] = now()
-    res = CLASNIP_DB[db_vcf_jld2_path][3]
-    unlock(CLASNIP_DB_LOAD_LOCK);
-    return res
 end
 function clasnip_get_group_nsample(db_vcf_jld2_path::AbstractString)
     global CLASNIP_DB
-    wait_for_lock(CLASNIP_DB_LOAD_LOCK)
-
-    if !haskey(CLASNIP_DB, db_vcf_jld2_path)
-        unlock(CLASNIP_DB_LOAD_LOCK);
-        return nothing
+    wait_for_lock(CLASNIP_DB_LOAD_LOCK) do
+        if !haskey(CLASNIP_DB, db_vcf_jld2_path)
+            return nothing
+        end
+        clasnip_db = CLASNIP_DB[db_vcf_jld2_path]
+        clasnip_db.access_time = now()
+        clasnip_db.nsample_group
     end
-    CLASNIP_DB[db_vcf_jld2_path][5] = now()
-    res = CLASNIP_DB[db_vcf_jld2_path][4]
-    unlock(CLASNIP_DB_LOAD_LOCK);
-    return res
 end
 function clasnip_get_all(db_vcf_jld2_path::AbstractString)
     global CLASNIP_DB
-    wait_for_lock(CLASNIP_DB_LOAD_LOCK)
-
-    if !haskey(CLASNIP_DB, db_vcf_jld2_path)
-        unlock(CLASNIP_DB_LOAD_LOCK);
-        return nothing,nothing,nothing,nothing
+    wait_for_lock(CLASNIP_DB_LOAD_LOCK) do
+        if !haskey(CLASNIP_DB, db_vcf_jld2_path)
+            return nothing,nothing,nothing,nothing
+        end
+        clasnip_db = CLASNIP_DB[db_vcf_jld2_path]
+        clasnip_db.access_time = now()
+        return (clasnip_db.db_vcf_parsed, clasnip_db.groups, clasnip_db.group_dict, clasnip_db.nsample_group)
     end
-    items = CLASNIP_DB[db_vcf_jld2_path]
-    CLASNIP_DB[db_vcf_jld2_path][5] = now()
-    unlock(CLASNIP_DB_LOAD_LOCK);
-    return (items[1], items[2], items[3], items[4])
 end
 
 
@@ -146,31 +185,30 @@ function db_unload_check!()
     global DB_MEM_LIMIT
     global DB_PROTECT_TIME
 
-    wait_for_lock(CLASNIP_DB_LOAD_LOCK)
-
-    used_mem = 0
-    for db_items in values(CLASNIP_DB)
-        used_mem += db_items[6]
-    end
-
-    if used_mem <= DB_MEM_LIMIT  # do not unload dbs
-        unlock(CLASNIP_DB_LOAD_LOCK);
-        return
-    end
-
     db_to_unload = String[]
-    for (db, items) in CLASNIP_DB
-        last_access_time = items[5]
-        if last_access_time + DB_PROTECT_TIME < now()
-            # ready for unload
-            push!(db_to_unload, db)
+    
+    wait_for_lock(CLASNIP_DB_LOAD_LOCK) do
+
+        used_mem = 0
+        for clasnip_db in values(CLASNIP_DB)
+            used_mem += clasnip_db.memory_size
+        end
+
+        if used_mem <= DB_MEM_LIMIT  # do not unload dbs
+            return
+        end
+
+        for (db, clasnip_db) in CLASNIP_DB
+            if clasnip_db.access_time + DB_PROTECT_TIME < now()
+                # ready for unload
+                push!(db_to_unload, db)
+            end
         end
     end
 
-    unlock(CLASNIP_DB_LOAD_LOCK);
-
     for db in db_to_unload
         clasnip_unload_database(db)
+        GC.gc()
     end
 end
 

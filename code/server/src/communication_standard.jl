@@ -1,5 +1,20 @@
 using Dates
 
+"""
+	@show_repl exs...
+
+Prints one or more expressions, and their results, to `Pipelines.stdout_origin`, and returns the last result.
+"""
+macro show_repl(exs...)
+    blk = Expr(:block)
+    for ex in exs
+        push!(blk.args, :(println(Pipelines.stdout_origin, $(sprint(Base.show_unquoted,ex)*" = "),
+                                  repr(begin local value = $(esc(ex)) end))))
+    end
+    isempty(exs) || push!(blk.args, :value)
+    return blk
+end
+
 function Base.get(ps::Array{Pair{SubString{String},SubString{String}},1}, k, default)
     for p in ps
         if p.first == k
@@ -21,7 +36,7 @@ function response_with_header(
 		logging_body ? print_request(request, status) : print_request_no_body(request, status)
 	end
 	if Config.SHOW_REQUEST
-		@show request
+		@show_repl request
 	end
 
     headers = HttpCommon.headers()

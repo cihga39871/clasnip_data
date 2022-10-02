@@ -2,6 +2,9 @@
 
 using Test
 
+user_job_logs_to_std = ClasnipMux.Config.JOB_LOGS_TO_STD
+ClasnipMux.Config.job_logs_to_std(true)
+
 if "--dev" in ARGS
    url = "http://0.0.0.0:$(Config.PORT_DEV)"
 else
@@ -57,9 +60,9 @@ end
    # check db name
    body = """{"token":"$token","username":"test","dbName":"precompile_test"}"""
    res = HTTP.request("POST", url * "/cnp/check_database_name", [], body, status_exception=false)
+   @test res.status == 200
    response = JSON.parse(String(res.body))
    db_server_path = get(response, "dbServerPath", nothing)
-   @test res.status == 200
    @test !isnothing(db_server_path)
 
    # uploading
@@ -93,11 +96,11 @@ end
    report_body = """{"token":"$token","username":"test","queryString":"$create_job_id//"}"""
    time_of_submit = now()
    while true
-      report_res = HTTP.request("POST", url * "/cnp/report_query", [], report_body, status_exception=false)
+      report_res = HTTP.request("POST", url * "/cnp/multi_report_query", [], report_body, status_exception=false)
       @test report_res.status == 200
       response = JSON.parse(String(report_res.body))
-      println(Pipelines.stdout_origin, "    Waiting for db build: ($(response["job"]["name"])) $(response["job"]["state"])")
-      if !(response["job"]["state"] in ("running", "queuing"))
+      println(Pipelines.stdout_origin, "    Waiting for db build: ($(response["jobs"][end]["name"])) $(response["jobs"][end]["state"])")
+      if !(response["jobs"][end]["state"] in ("running", "queuing"))
          break
       end
       if now() - time_of_submit > Minute(10)
@@ -106,11 +109,11 @@ end
       end
       sleep(10)
    end
-   report_res = HTTP.request("POST", url * "/cnp/report_query", [], report_body, status_exception=false)
+   report_res = HTTP.request("POST", url * "/cnp/multi_report_query", [], report_body, status_exception=false)
    @test report_res.status == 200
-   println(Pipelines.stdout_origin, "    Waiting for db build: ($(response["job"]["name"])) $(response["job"]["state"])")
+   println(Pipelines.stdout_origin, "    Waiting for db build: ($(response["jobs"][end]["name"])) $(response["jobs"][end]["state"])")
    response = JSON.parse(String(report_res.body))
-   @test response["job"]["state"] == "done"
+   @test response["jobs"][end]["state"] == "done"
 
 
    @testset "Browsing databases" begin
@@ -137,7 +140,7 @@ end
    end
 
    @testset "New analysis" begin
-      res = HTTP.request("POST", url * "/cnp/submit_job", [], """{"token":"$token","username":"test","email":"test@abc.def","database":"precompile_test","sequences":">JX624246.1 Candidatus Liberibacter solanacearum clone WA-psyllids-1 16S ribosomal RNA gene, partial sequence\\nGCGCTTATTTTTAATAGGAGCGGCAGACGGGTGAGTAACGCGTGGGAATCTACCTTTTTCTACGGGATAA\\nCGCACGGAAACGTGTGCTAATACCGTATACGCCCTGAGAAGGGGAAAGATTTATTGGAGAGAGATGAGCC\\nCGCGTTAGATTAGCTAGTTGGTGGGGTAAATGCCTACCAAGGCTACGATCTATAGCTGGTCTGAGAGGAC\\nGATCAGCCACACTGGGACTGAGACACGGCCCAGACTCCTACGGGAGGCAGCAGTGGGGAATATTGGACAA\\nTGGGGGCAACCCTGATCCAGCCATGCCGCGTGAGTGAAGAAGGCCTTAGGGTTGTAAAGCTCTTTCGCCG\\nGAGAAGATAATGACGGTATCCGGAGAAGAAGTCCCGGCTAACTTCGTGCCAGCAGCCGCGGTAATACGAA\\nGGGGGCGAGCGTTGTTCGGAATAACTGGGCGTAAAGGGCGCGTAGGCGGGTAATTAAGTTAGGGGTGAAA\\nTCCCAAGGCTCAACCTTGGAACTGCCTTTAATACTGGTTATCTAGAGTTTAGGAGAGGTGAGTGGAATTC\\nCGAGTGTAGAGGTGAAATTCGCAGATATTCGGAGGAACACCAGTGGCGAAGGCGGCTCACTGGCCTGATA\\nCTGACGCTGAGGCGCGAAAGCGTGGGGAGCAAACAGGATTAGATACCCTGGTAGTCCACGCTGTAAACGA\\nTGAGTGCTAGCTGTTGGGTGGTTTACCATTCAGTGGCGCAGCTAACGCATTAAGCACTCCGCCTGGGGAG\\nTACGGTCGCAAGATTAAAACTCAAAGGAATTGACGGGGGCCCGCACAAGCGGTGGAGCATGTGGTTTAAT\\nTCGATGCAACGCGCAGAACCTTACCAGCCCTTGACATATAGAGGACGATATCAGAGATGGTATTTTCTTT\\nTCGGAGACCTTTATACAGGTGCTGCATGGCTGTCGTCAGCTCGTGTCGTGAGATGTTGGGTTAAGTCCCG\\nCAACGAGCGCAACCCCTACCTCTAGTTGCCATCAAGTTTAGATTTTATCTAGATGTTGGGTACTTTATAG\\nGGACTGCCGGTGATAATCCGGAGGAAGGTGGGGATGACGTCAAGTCCTCATGGCCCTTATGGGCTGGGCT\\nACACACGTGCTACAATGGTGGTTACAATGGGTTGCGAAGTCGCGAGGC"}""", status_exception=false)
+      res = HTTP.request("POST", url * "/cnp/submit_job_multi_db", [], """{"token":"$token","username":"test","email":"test@abc.def","databases":["precompile_test"],"sequences":">JX624246.1 Candidatus Liberibacter solanacearum clone WA-psyllids-1 16S ribosomal RNA gene, partial sequence\\nGCGCTTATTTTTAATAGGAGCGGCAGACGGGTGAGTAACGCGTGGGAATCTACCTTTTTCTACGGGATAA\\nCGCACGGAAACGTGTGCTAATACCGTATACGCCCTGAGAAGGGGAAAGATTTATTGGAGAGAGATGAGCC\\nCGCGTTAGATTAGCTAGTTGGTGGGGTAAATGCCTACCAAGGCTACGATCTATAGCTGGTCTGAGAGGAC\\nGATCAGCCACACTGGGACTGAGACACGGCCCAGACTCCTACGGGAGGCAGCAGTGGGGAATATTGGACAA\\nTGGGGGCAACCCTGATCCAGCCATGCCGCGTGAGTGAAGAAGGCCTTAGGGTTGTAAAGCTCTTTCGCCG\\nGAGAAGATAATGACGGTATCCGGAGAAGAAGTCCCGGCTAACTTCGTGCCAGCAGCCGCGGTAATACGAA\\nGGGGGCGAGCGTTGTTCGGAATAACTGGGCGTAAAGGGCGCGTAGGCGGGTAATTAAGTTAGGGGTGAAA\\nTCCCAAGGCTCAACCTTGGAACTGCCTTTAATACTGGTTATCTAGAGTTTAGGAGAGGTGAGTGGAATTC\\nCGAGTGTAGAGGTGAAATTCGCAGATATTCGGAGGAACACCAGTGGCGAAGGCGGCTCACTGGCCTGATA\\nCTGACGCTGAGGCGCGAAAGCGTGGGGAGCAAACAGGATTAGATACCCTGGTAGTCCACGCTGTAAACGA\\nTGAGTGCTAGCTGTTGGGTGGTTTACCATTCAGTGGCGCAGCTAACGCATTAAGCACTCCGCCTGGGGAG\\nTACGGTCGCAAGATTAAAACTCAAAGGAATTGACGGGGGCCCGCACAAGCGGTGGAGCATGTGGTTTAAT\\nTCGATGCAACGCGCAGAACCTTACCAGCCCTTGACATATAGAGGACGATATCAGAGATGGTATTTTCTTT\\nTCGGAGACCTTTATACAGGTGCTGCATGGCTGTCGTCAGCTCGTGTCGTGAGATGTTGGGTTAAGTCCCG\\nCAACGAGCGCAACCCCTACCTCTAGTTGCCATCAAGTTTAGATTTTATCTAGATGTTGGGTACTTTATAG\\nGGACTGCCGGTGATAATCCGGAGGAAGGTGGGGATGACGTCAAGTCCTCATGGCCCTTATGGGCTGGGCT\\nACACACGTGCTACAATGGTGGTTACAATGGGTTGCGAAGTCGCGAGGC"}""", status_exception=false)
       @test res.status == 200
       response = JSON.parse(String(res.body))
    end
@@ -146,18 +149,18 @@ end
       job_id = response["jobID"]
       job_name = response["jobName"]
       query_string = "$job_id//$job_name"
-      res = HTTP.request("POST", url * "/cnp/report_query", [], """{"token":"$token","username":"test","queryString":"$query_string"}""", status_exception=false)
+      res = HTTP.request("POST", url * "/cnp/multi_report_query", [], """{"token":"$token","username":"test","queryString":"$query_string"}""", status_exception=false)
       @test res.status == 200
       response = JSON.parse(String(res.body))
-      @test !isnothing(response["job"])
+      @test !isempty(response["jobs"])
 
       time_of_submit = now()
       while true
-         res = HTTP.request("POST", url * "/cnp/report_query", [], """{"token":"$token","username":"test","queryString":"$query_string"}""", status_exception=false)
+         res = HTTP.request("POST", url * "/cnp/multi_report_query", [], """{"token":"$token","username":"test","queryString":"$query_string"}""", status_exception=false)
          response = JSON.parse(String(res.body))
 
-         println(Pipelines.stdout_origin, "    Waiting for analysis finish: ($(response["job"]["name"])) $(response["job"]["state"])")
-         if !(response["job"]["state"] in ("running", "queuing"))
+         println(Pipelines.stdout_origin, "    Waiting for analysis finish: ($(response["jobs"][end]["name"])) $(response["jobs"][end]["state"])")
+         if !(response["jobs"][end]["state"] in ("running", "queuing"))
             break
          end
          if now() - time_of_submit > Minute(2)
@@ -166,26 +169,26 @@ end
          end
          sleep(10)
       end
-      res = HTTP.request("POST", url * "/cnp/report_query", [], """{"token":"$token","username":"test","queryString":"$query_string"}""", status_exception=false)
+      res = HTTP.request("POST", url * "/cnp/multi_report_query", [], """{"token":"$token","username":"test","queryString":"$query_string"}""", status_exception=false)
       @test res.status == 200
       response = JSON.parse(String(res.body))
-      @test response["job"]["state"] == "done"
+      @test response["jobs"][end]["state"] == "done"
 
       # view results
-      @test isfile(response["log"])
-      res = HTTP.request("POST", url * "/cnp/file_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["log"])"}""", status_exception=false)
+      @test isfile.(response["logs"][1])
+      res = HTTP.request("POST", url * "/cnp/file_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["logs"][1])"}""", status_exception=false)
       @test res.status == 200
 
       @test isfile(response["seq"])
       res = HTTP.request("POST", url * "/cnp/file_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["seq"])"}""", status_exception=false)
       @test res.status == 200
 
-      @test isfile(response["mlstTable"])
-      res = HTTP.request("POST", url * "/cnp/quasar_table_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["mlstTable"])"}""", status_exception=false)
+      @test isfile(response["mlstTables"][1])
+      res = HTTP.request("POST", url * "/cnp/quasar_table_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["mlstTables"][1])"}""", status_exception=false)
       @test res.status == 200
 
-      @test isfile(response["classificationResult"])
-      res = HTTP.request("POST", url * "/cnp/quasar_table_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["classificationResult"])"}""", status_exception=false)
+      @test isfile(response["classificationResults"][1])
+      res = HTTP.request("POST", url * "/cnp/quasar_table_viewer", [], """{"token":"$token","username":"test","filePath":"$(response["classificationResults"][1])"}""", status_exception=false)
       @test res.status == 200
    end
 end
@@ -218,3 +221,5 @@ end
 
 @info "Precompilation and tests exit without errors."
 @info "Clasnip server is ready at $url"
+
+ClasnipMux.Config.job_logs_to_std(user_job_logs_to_std)

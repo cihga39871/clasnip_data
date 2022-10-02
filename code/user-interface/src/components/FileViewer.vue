@@ -22,6 +22,7 @@
             @click="download(link)"
           />
         </span>
+        <div class="text-subtitle2 text-secondary" v-if="subtitle.length > 0" >{{ subtitle }}</div>
       </q-card-section>
 
       <q-separator v-if="flat ? false : true" />
@@ -87,6 +88,10 @@ export default {
     label: {
       type: String,
       default: 'auto'
+    },
+    subtitle: {
+      type: String,
+      default: ''
     },
     format: {
       type: String,

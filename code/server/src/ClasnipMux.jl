@@ -28,7 +28,7 @@ include(joinpath("utils", "Utils.jl"))
 
 include("status_messages.jl")
 include("communication_standard.jl")
-export json_response, response_with_header, get_request_data!
+export json_response, response_with_header, get_request_data!, @show_repl
 
 # include(joinpath(ENV["CJCBioTools"], "api", "julia", "clasnip_pipeline", "ClasnipPipeline.jl"))
 # @reexport using .ClasnipPipeline
@@ -50,5 +50,6 @@ set_scheduler_update_second(Config.SCHEDULER_UPDATE_SECOND)
 set_scheduler_max_cpu(round(Int, Config.SCHEDULER_MAX_CPU - 1))
 
 include("router.jl")
+export run_server, stop_server, restart_server
 
 end

@@ -99,7 +99,7 @@ function api_login(request)
             end
 
             # check pass_code
-            if pass_code == encrypt(df[1, :password], token_str)
+            if pass_code == Auth.encrypt(df[1, :password], token_str)
                 # login success
                 name = df[1, :name]
                 email = df[1, :email]
@@ -207,7 +207,7 @@ function api_register(request)
     end
 
     salt = randstring()
-    password = encrypt(password, salt)
+    password = Auth.encrypt(password, salt)
     time_last_try = now().instant.periods.value
 
     sql = """

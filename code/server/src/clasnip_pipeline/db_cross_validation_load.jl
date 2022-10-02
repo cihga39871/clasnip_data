@@ -12,6 +12,28 @@ struct ClasnipCvDb
     fasta_analysis_dir::String
 end
 
+function Base.empty!(cv_db::ClasnipCvDb)
+    empty!(cv_db.db_vcf_parsed_A)
+    empty!(cv_db.db_vcf_parsed_B)
+    empty!(cv_db.groups_AB)
+
+    for (k,v) in cv_db.group_A_dict
+        empty!(v)
+    end
+    empty!(cv_db.group_A_dict)
+
+    for (k,v) in cv_db.group_B_dict
+        empty!(v)
+    end
+    empty!(cv_db.group_B_dict)
+
+    empty!(cv_db.nsample_group_A)
+    empty!(cv_db.nsample_group_B)
+    empty!(cv_db.samples_A)
+    empty!(cv_db.samples_B)
+    nothing
+end
+
 """
     CLASNIP_CV_DB = Dict{String, Any}(
         db_vcf_jld2_path_AB => [db_mlst, groups, group_dict, nsample_group, last_modified::DateTime, memory_in_bytes::Int]
@@ -65,13 +87,14 @@ function clasnip_unload_cv_database(db_vcf_jld2_path_AB::AbstractString)
 
     ret = try
         if haskey(CLASNIP_CV_DB, db_vcf_jld2_path_AB)
+            empty!(CLASNIP_CV_DB[db_vcf_jld2_path_AB])
             delete!(CLASNIP_CV_DB, db_vcf_jld2_path_AB)
             true
         else
             false
         end
     catch e
-        @error "clasnip_unload_cv_database: $db_vcf_jld2_path_AB" exception=(e, catch_backtrace())
+        @error Pipelines.timestamp() * "clasnip_unload_cv_database: $db_vcf_jld2_path_AB" exception=(e, catch_backtrace())
         false
     finally
         unlock(CLASNIP_CV_DB_LOAD_LOCK);
@@ -90,7 +113,7 @@ function get_clasnip_cv_db(db_vcf_jld2_path_AB::AbstractString)
 
     if !haskey(CLASNIP_CV_DB, db_vcf_jld2_path_AB)
         unlock(CLASNIP_CV_DB_LOAD_LOCK);
-        @error "get_clasnip_cv_db_elements: database not cached $db_vcf_jld2_path_AB"
+        @error Pipelines.timestamp() * "get_clasnip_cv_db_elements: database not cached $db_vcf_jld2_path_AB"
         return nothing
     end
     cv_db = CLASNIP_CV_DB[db_vcf_jld2_path_AB]
@@ -113,7 +136,7 @@ end
 function get_clasnip_cv_db_elements(db_vcf_jld2_path_AB::AbstractString, db_reverse::Bool=false)
     cv_db = get_clasnip_cv_db(db_vcf_jld2_path_AB)
     if isnothing(cv_db)
-        @error "get_clasnip_cv_db_elements: database not cached $db_vcf_jld2_path_AB"
+        @error Pipelines.timestamp() * "get_clasnip_cv_db_elements: database not cached $db_vcf_jld2_path_AB"
         return (nothing, nothing, nothing, nothing)
     end
     if db_reverse
