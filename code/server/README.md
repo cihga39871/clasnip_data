@@ -3,7 +3,7 @@
 ## Run Clasnip Server
 
 ```bash
-bash Clasnip/server/start_server.bash
+bash clasnip_data/code/server/start_server.bash
 ```
 
 It also accepts arguments:
