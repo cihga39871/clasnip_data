@@ -44,7 +44,7 @@ You can also put your secret config file under `server/config/config.secret.jl`.
 
 ## Run / Host Clasnip
 
-The Clasnip server and web application need to run separately.
+The Clasnip server and web application need to be run separately.
 
 - [Instructions to run the Clasnip server](server/README.md)
 - [Instructions to run the web application](user-interface/README.md)

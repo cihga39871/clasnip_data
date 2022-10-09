@@ -1,4 +1,4 @@
-# Clasnip (clasnip)
+# Clasnip web interface
 
 Closely-related microorganism classification based on SNPs
 
