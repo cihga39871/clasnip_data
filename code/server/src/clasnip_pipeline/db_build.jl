@@ -115,7 +115,8 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
     # run the fist sample to precompile
     in_vcf2mlst = Dict(
         "VCF" => fastas[1] * ".fq.bam.all.vcf",
-        "DB_VCF_JLD2" => db_prefix * ".reduced.jld2"
+        "DB_VCF_JLD2" => db_prefix * ".reduced.jld2",
+        "WRITE_MLST" => false
     )
     vcf2mlst_job = Job(ClasnipPipeline.program_vcf2mlst, in_vcf2mlst; dependency = vcf2mlst_deps, dir = working_dir, ncpu = 2, mem = 2GB, common_kwargs...)
     submit!(vcf2mlst_job)
@@ -124,7 +125,8 @@ function clasnip_db_build(fastas::Vector{String}, labels::Vector{String}, ref::S
     for fasta in fastas[2:end]
         in_vcf2mlst = Dict(
             "VCF" => fasta * ".fq.bam.all.vcf",
-            "DB_VCF_JLD2" => db_prefix * ".reduced.jld2"
+            "DB_VCF_JLD2" => db_prefix * ".reduced.jld2",
+            "WRITE_MLST" => false
         )
         push!(vcf2mlst_jobs, Job(ClasnipPipeline.program_vcf2mlst, in_vcf2mlst; dependency = [DONE => vcf2mlst_job], dir = working_dir, ncpu = 2, mem = 2GB, common_kwargs...))
     end
@@ -192,7 +194,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     outdir = abspath(outdir)
     isdir(outdir) || mkpath(outdir, mode = 0o755)
 
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess" outdir
 
     outfiles = Dict{String, Any}()
     nsample = length(labels)
@@ -202,7 +204,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     end
 
     # generating identity results for all samples
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: generating identity results for all samples" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: generating identity results for all samples" outdir
     for i in 1:nsample
         label = labels[i]
         identity_res = identity_results[i]
@@ -219,7 +221,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 
     ### stats: identity distribution for each labeled group
     # using AverageShiftedHistograms
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: identity distribution for each labeled group" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: identity distribution for each labeled group" outdir
     self_identity_res_cvg = @subset(all_identity_res, :SAME .== true, :COVERED_SNP_SCORE .>= coverage_cutoff)
     gdf_self_identity_res_cvg = groupby(self_identity_res_cvg, :LABELED_GROUP)
     identity_distributions = Dict{String, AverageShiftedHistograms.Ash}()
@@ -235,14 +237,14 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 
 
     ### compute probability based on identity distributions
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute probability based on identity distributions" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute probability based on identity distributions" outdir
     @rtransform!(all_identity_res,
         # :P_VALUE = cumulated_density(identity_distributions, :GROUP, :PERCENT_MATCHED)
         :CDF = ClasnipPipeline.cumulated_density(identity_distributions, :GROUP, :PERCENT_MATCHED)
     )
 
     ### compute normalized probability for all sample
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute normalized probability for all sample" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute normalized probability for all sample" outdir
     gdf_sample_identity_res = groupby(all_identity_res, :LABEL)
     @transform!(gdf_sample_identity_res,
         :PROBABILITY = ClasnipPipeline.value_normalize(:CDF)
@@ -255,19 +257,19 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     self_identity_res = @subset(all_identity_res, :SAME .== true)
 
     ### stats: wrongly classified samples
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: find wrongly classified samples" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: find wrongly classified samples" outdir
     wrongly_classified = @subset(self_identity_res, :RANK .!= 1)
     outfiles["STAT_WRONG_CLASSIFIED"] = joinpath(outdir, "stat.wrongly_classified.txt")
     CSV.write(outfiles["STAT_WRONG_CLASSIFIED"], wrongly_classified, delim='\t')
 
     ### stats: low coverage samples
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: find low coverage samples" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: find low coverage samples" outdir
     low_coverages = @subset(self_identity_res, :COVERED_SNP_SCORE .< coverage_cutoff)
     outfiles["STAT_LOW_COVERAGES"] = joinpath(outdir, "stat.low_coverages.txt")
     CSV.write(outfiles["STAT_LOW_COVERAGES"], low_coverages, delim='\t')
 
     ### stats: accuracy and identity
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute accuracy and identity" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute accuracy and identity" outdir
 	if nrow(self_identity_res_cvg) > 0
 		accuracy_and_identity = @chain self_identity_res begin
 	        @subset(:COVERED_SNP_SCORE .>= coverage_cutoff)
@@ -300,13 +302,13 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     CSV.write(outfiles["STAT_ACCURACY_AND_IDENTITY"], accuracy_and_identity, delim='\t')
 
     # stats: overall accuracy
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute overall accuracy" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute overall accuracy" outdir
     db_accuracy = sum(accuracy_and_identity.N_ACCURATE) / sum(accuracy_and_identity.N_SAMPLE)
     outfiles["IDENTITY_DISTRIBUTIONS"] = joinpath(outdir, "stat.identity_distributions.jld2")
     @save outfiles["IDENTITY_DISTRIBUTIONS"] identity_distributions db_accuracy
 
     ### stats: ROC and more classifier performance metrics
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute classifier_performance" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute classifier_performance" outdir
     df_performance = ClasnipPipeline.classifier_performance(all_identity_res, outdir)
     outfiles["PLOT_ROC"] = []
     outfiles["STAT_CLASSIFIER_PERFORMANCE"] = joinpath(outdir, "stat.classifier_performance.txt")
@@ -314,7 +316,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 
 
     ### density plots for each group
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: density plots for each group" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: density plots for each group" outdir
     all_identity_res_cvg = @subset(all_identity_res, :COVERED_SNP_SCORE .>= coverage_cutoff)
     gdf_identity_res_cvg = groupby(all_identity_res_cvg, :LABELED_GROUP)
     density_plot_files = String[]
@@ -339,10 +341,10 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
     outfiles["PLOT_DENSITIES"] = density_plot_files
 
     ### heatmap of identity
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: heatmap of identity" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: heatmap of identity" outdir
 	if isempty(all_identity_res_cvg)
 		# not plot
-        @warn Pipelines.timestamp() * "clasnip_db_quality_assess: heatmap of identity: skip plot for empty all_identity_res_cvg" outdir db_vcf
+        @warn Pipelines.timestamp() * "clasnip_db_quality_assess: heatmap of identity: skip plot for empty all_identity_res_cvg" outdir
 		outfiles["STAT_HEATMAP_IDENTITY"] = ""
 		outfiles["PLOT_HEATMAP_IDENTITY"] = ""
 	else
@@ -386,6 +388,8 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 	    dm = Distances.pairwise(Distances.Euclidean(), pd, dims=2)
 	    hcl2 = Clustering.hclust(dm, linkage=:average, branchorder=:optimal)
 
+        heatmap_width = ifelse(ngroup <= 20, 600, 30 * ngroup)  # 600 * ngroup / 20
+
 		wait_for_lock(PLOT_LOCK) do
 		    heatmap_identity = plot(
 		        plot(hcl2, xticks=false, yticks=false, grid=false, showaxis=false,
@@ -403,7 +407,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 		        layout = grid(2,1, heights=[0.2,0.8]),
 		        legend = false,
 		        tick_direction = :none,
-                size = (600,600)
+                size = (heatmap_width, heatmap_width)
 		    )
 		    outfiles["PLOT_HEATMAP_IDENTITY"] = joinpath(outdir, "plot.heatmap_identity.svg")
 		    Plots.svg(heatmap_identity, outfiles["PLOT_HEATMAP_IDENTITY"])
@@ -412,9 +416,9 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
 	end
 
     ### count pairwise SNP
-    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups" outdir db_vcf
+    @info Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups" outdir
     if db_vcf == ""
-        @warn Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups: skip for db not provided" outdir db_vcf
+        @warn Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups: skip for db not provided" outdir
         # db not provided, skip
         outfiles["STAT_PAIRWISE_SNP_SCORE"] = ""
         outfiles["STAT_PAIRWISE_SNP_SCORE_NAME_ORDERED"] = ""
@@ -425,7 +429,7 @@ function clasnip_db_quality_assess(labels::Vector{String}, identity_results::Vec
         snp_matrix, snp_matrix_name_ordered = ClasnipPipeline.pairwise_snp_score_for_db_groups(db_vcf, outplot_svg = outfiles["PLOT_HEATMAP_SNP_SCORE"], coverage_cutoff = coverage_cutoff)
 
 		if isnothing(snp_matrix) # failed
-            @error Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups: failed: snp_matrix is nothing" outdir db_vcf
+            @error Pipelines.timestamp() * "clasnip_db_quality_assess: compute pairwise_snp_score_for_db_groups: failed: snp_matrix is nothing" outdir
             outfiles["STAT_PAIRWISE_SNP_SCORE"] = ""
 			outfiles["STAT_PAIRWISE_SNP_SCORE_NAME_ORDERED"] = ""
 			outfiles["PLOT_HEATMAP_SNP_SCORE"] = ""
@@ -655,6 +659,9 @@ function pairwise_snp_score_for_db_groups(db_vcf::AbstractString; outplot_svg::A
 
     @info "pairwise_snp_score_for_db_groups: plot heatmap" db_vcf outplot_svg
 
+    n_digit = ceil(Int, log10(maximum(snp_coverage_matrix))) + 3
+    heatmap_width = max(600, 6 * n_digit * ngroup)
+
 	wait_for_lock(PLOT_LOCK) do
 	    plot_heat = Plots.heatmap(snp_percent_matrix_reodered, colorbar=false,
 	        xticks=(1:ngroup, groups_ordered),
@@ -690,7 +697,7 @@ function pairwise_snp_score_for_db_groups(db_vcf::AbstractString; outplot_svg::A
 	        ),
 	        plot_heat,
 	        layout=grid(2,1, heights=[0.15,0.85]),
-	        size = (600,600),
+	        size = (heatmap_width, heatmap_width),
 	        legend = false,
 	        tick_direction = :none,
 	    )

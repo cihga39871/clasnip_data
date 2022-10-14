@@ -66,12 +66,17 @@ function clasnip_load_database(db_vcf_jld2_path::AbstractString; reload::Bool=fa
     # check whether other program is loading
     wait_for_lock(CLASNIP_DB_LOAD_LOCK)
 
+    time0 = now()
     try
         CLASNIP_DB_LOADING[db_vcf_jld2_path] = true
 
         # start loading
         @load db_vcf_jld2_path db_vcf_parsed groups group_dict nsample_group
         
+        # fix if db_vcf_parsed isa JLD2.ReconstructedTypes.var"##DataFrame#416"
+        # which caused from using a different version of DataFrame when building db
+        db_vcf_parsed = reconstruct_dataframe(db_vcf_parsed)
+
         db_vcf_parsed = parsed_db_vcf_to_mlst!(db_vcf_parsed::DataFrame, groups::Vector)
         ClasnipPipeline.unique_reference_for_db_vcf_parsed!(db_vcf_parsed) # reduce memory usage to 60%
 
@@ -89,15 +94,29 @@ function clasnip_load_database(db_vcf_jld2_path::AbstractString; reload::Bool=fa
         #     nothing
         # end
         # submit!(job_compute_memory_size)
+        time1 = now()
+        elapsed_second = (time1 - time0).value / 1000
+        @info "Load database ($(elapsed_second)s): $db_vcf_jld2_path"
     catch e
         @error Pipelines.timestamp() * "Fail to load clasnip database: $db_vcf_jld2_path" exception=e
     finally
         delete!(CLASNIP_DB_LOADING, db_vcf_jld2_path)
         unlock(CLASNIP_DB_LOAD_LOCK);
     end
-
-
     return nothing
+end
+
+reconstruct_dataframe(db_vcf_parsed::DataFrame) = db_vcf_parsed
+function reconstruct_dataframe(db_vcf_parsed)
+    if fieldnames(typeof(db_vcf_parsed)) == (:columns, :colindex)
+        db_vcf_parsed.colindex
+        db_vcf_parsed.columns
+        col_names = db_vcf_parsed.colindex.names
+        DataFrame([name => db_vcf_parsed.columns[db_vcf_parsed.colindex.lookup[name]] for name in col_names])
+    else
+        @error "Fail to reconstruct DataFrame from jld2 file!"
+        df
+    end
 end
 
 function clasnip_unload_database(db_vcf_jld2_path::AbstractString)

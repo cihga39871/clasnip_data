@@ -95,10 +95,16 @@
                 <div class="text-body2 text-grey-9">
                   Covered regions or genes
                 </div>
-                <q-input outlined bottom-slots v-model="region" dense :readonly="dbType === 'genomic'">
+                <q-input outlined bottom-slots v-model="region" dense :readonly="dbType === 'genomic' || dbType === 'genomic - all samples are assemblies'">
                 </q-input>
               </div>
             </div>
+
+            <div class="text-body2 text-grey-9">
+              Samples are grouped by
+            </div>
+            <q-input outlined bottom-slots v-model="groupBy" dense placeholder="species, sub-species, haplotypes, strain groups, phylogroups, etc.">
+            </q-input>
 
             <div class="text-body2 text-grey-9">
                 Upload the compressed database file
@@ -110,7 +116,7 @@
               The folder contains several subfolders, indicating classification groups. <br/>
               Sequences in Fasta format are placed under the subfolders. Each Fasta file is considered as one sample. <br/>
               <b>Accepted compressed method:</b> zip | tar.gz | tar.bz2 | tar.xz | tar.Z <br/>
-              <b>Size limit:</b> 60M
+              <b>Size limit:</b> {{ DB_FILE_MAX_SIZE_MB }}M
             </div>
 
             <q-uploader
@@ -119,7 +125,7 @@
               :disable="disableUpload"
               style="max-width: 600px"
               flat bordered
-              max-file-size="104857600"
+              :max-file-size="DB_FILE_MAX_SIZE_MB * 1024 * 1024"
               max-files="1"
               accept=".tar.gz, .zip, .tar.xz, .tar.z, .tar.Z, .tar.bz2, .tar"
               @rejected="onUploadReject"
@@ -269,11 +275,12 @@ export default {
       refGenome: null,
       refGenomeText: 'Not selected',
       dbType: '',
-      dbTypeOptions: ['genomic', 'multiple genes', 'single gene'],
+      dbTypeOptions: ['genomic', 'genomic - all samples are assemblies', 'multiple genes', 'single gene'],
       region: '',
       taxonomyRank: '',
       taxonomyRankOptions: ['strain', 'species', 'genus'],
       taxonomyName: '',
+      groupBy: '',
       uploadHeaders: [
         { name: 'token', value: localStorage.getItem('token') },
         { name: 'username', value: localStorage.getItem('username') },
@@ -401,6 +408,9 @@ export default {
     },
 
     createDatabase: function () {
+      if (this.groupBy === '') {
+        this.groupBy = 'groups' // default value
+      }
       var jobData = {
         token: localStorage.getItem('token'),
         username: localStorage.getItem('username'),
@@ -410,7 +420,8 @@ export default {
         dbType: this.dbType,
         region: this.region,
         taxonomyRank: this.taxonomyRank,
-        taxonomyName: this.taxonomyName
+        taxonomyName: this.taxonomyName,
+        groupBy: this.groupBy
       }
       this.$axios
         .post(this.MUX_URL + '/cnp/create_database', JSON.stringify(jobData))
@@ -457,6 +468,8 @@ export default {
 
     dbType: function () {
       if (this.dbType === 'genomic') {
+        this.region = 'genomic'
+      } else if (this.dbType === 'genomic - all samples are assemblies') {
         this.region = 'genomic'
       } else {
         this.region = ''

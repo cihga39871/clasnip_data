@@ -57,6 +57,7 @@ FILE_VIEWER_MAX_SIZE = 1024 * 1024 * 20
 
 "The file paths that allowed in file viewer API"
 FILE_VIEWER_LIMIT_GENERAL = Regex("^$ANALYSIS_DIR|^$DB_DIR/[A-Za-z0-9_-]+/(data.|plot.|stat.)")
+FILE_VIEWER_LIMIT_GENERAL_DEV = Regex("^$ANALYSIS_DIR_DEV|^$DB_DIR_DEV/[A-Za-z0-9_-]+/(data.|plot.|stat.)")
 
 # checking new database names
 "The character distance between new database name and all existing database names"
@@ -73,7 +74,7 @@ CLEAN_TMP_FILES = true
 # schedular
 """
     SCHEDULER_MAX_CPU = 8
-The maximum CPU the scheduler can use. Caution: by default, the Julia uses  SCHEDULER_MAX_CPU + 2 threads. The remaining two threads are for Job allocating and response to HTML requests. It won't work right now since job will not switch between threads (JULIA v1.6.1).
+The maximum CPU the scheduler can use. Caution: by default, the Julia uses  SCHEDULER_MAX_CPU + 2 threads. The remaining two threads are for Job allocating and response to HTML requests.
 """
 SCHEDULER_MAX_CPU = 8  # max cpu for all polychrome jobs
 SCHEDULER_UPDATE_SECOND = 0.3

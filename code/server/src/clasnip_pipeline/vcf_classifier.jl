@@ -5,7 +5,7 @@ using DataFrames, DataFramesMeta
 using CSV
 using JLD2
 using StatsBase
-using GenomicFeatures, GFF3
+using GenomicFeatures#, GFF3
 using Dates
 using Pipelines
 using StringViews

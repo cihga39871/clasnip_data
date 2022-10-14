@@ -70,7 +70,7 @@ function clasnip_db_cross_validation_wrapper(
 
 	@info Pipelines.timestamp() * "clasnip_db_cross_validation_wrapper" db_vcf_path fasta_analysis_dir reference_index_path
 
-    low_coverages = CSV.read(stats_low_coverages_path, DataFrame; ntasks=1)
+    low_coverages = CSV.read(stats_low_coverages_path, DataFrame; ntasks=1, stringtype=String)
     low_coverage_samples = Set(low_coverages.LABEL)
 
     db_vcf_jld2_path = db_vcf_path * ".reduced.jld2"
@@ -251,9 +251,9 @@ function clasnip_db_cross_validation(
             "OUT_PREFIX" => outprefix
         )
 		if isempty(vcf2mlst_jobs)
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2,common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, mem = 2GB, common_kwargs...)
 		else
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, dependency = [PAST => vcf2mlst_jobs[1]], common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, mem = 2GB, dependency = [PAST => vcf2mlst_jobs[1]], common_kwargs...)
 		end
         push!(vcf2mlst_jobs, j)
     end
@@ -317,9 +317,9 @@ function clasnip_db_cross_validation(
             "OUT_PREFIX" => outprefix
         )
 		if isempty(vcf2mlst_jobs_train)
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, mem = 2GB, common_kwargs...)
 		else
-			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, dependency = [PAST => vcf2mlst_jobs_train[1]], common_kwargs...)
+			j = Job(ClasnipPipeline.program_vcf2mlst_with_cv_db, in_vcf2mlst; ncpu = 2, mem = 2GB, dependency = [PAST => vcf2mlst_jobs_train[1]], common_kwargs...)
 		end
 		push!(vcf2mlst_jobs_train, j)
 	end

@@ -30,7 +30,7 @@ function add_clasnip_db_info(db_info::Dict)
     for (name, info) in db_info
         if is_valid_clasnip_db_info(info)
             if haskey(CLASNIP_DB_INFO, name)
-                @warn "Clasnip database reload for same name: $name" info
+                @warn "Clasnip database reload for same name: $name"
             end
             CLASNIP_DB_INFO[name] = info
             CLASNIP_FORMATED_DB_NAME[format_database_name(name)] = name
@@ -113,6 +113,7 @@ function db_desensitization()
         new_dict["region"] = get(dict, "region", "")
         new_dict["taxonomyRank"] = get(dict, "taxonomyRank", "")
         new_dict["taxonomyName"] = get(dict, "taxonomyName", "")
+        new_dict["groupBy"] = get(dict, "groupBy", "groups")
         new_dict["date"] = get(dict, "date", "0000-00-00")
 
         db[name] = new_dict

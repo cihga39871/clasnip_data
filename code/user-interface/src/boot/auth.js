@@ -37,19 +37,16 @@ Vue.prototype.updateDbOptions = function (funcSuccess) {
     .then(response => {
       var dbKeys = Object.keys(response.data)
       var dbOptions = dbKeys.map(key => {
-        var label
         var formattedDbName = key.replace(/[^A-Za-z0-9_]+/g, '_')
         var db = response.data[key]
-        if (db.taxonomyName === '') {
-          label = '<div class="row"><div class="col">' +
-          key +
-          '</div><div class="q-ml-sm col-auto text-right text-grey"> [created by ' +
-          db.owner + ']</div></div>'
-        } else {
-          label = '<div class="row"><div class="col">' +
-            db.taxonomyName + ' (' + db.region + ') ' +
-            '</div><div class="q-ml-sm col-auto text-right text-grey"> [' + db.date + ']</div></div>'
+        if (db.groupBy === undefined) {
+          db.groupBy = 'groups'
         }
+        var label = '<div class="row"><div class="col-grow justify-between">' + db.taxonomyName +
+          ',<span class="text-green-8 justify-between"> ' + Object.keys(db.groups).length + ' ' + db.groupBy +
+          '</span><span class="text-green-8 justify-between">' + ' (' + db.region + ')</span>' +
+          '</div><div class="q-ml-sm col-auto text-right text-grey justify-between"> [' + db.date + ']</div></div>'
+
         return {
           label: label,
           value: key,

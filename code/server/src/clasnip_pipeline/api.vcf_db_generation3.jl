@@ -143,7 +143,7 @@ end
 Parse fasta/fastq index file (.fai). Return a `DataFrame` with columns `["CHROM", "LENGTH", "OFFSET", "LINEBASES", "LINEWIDTH", "QUALOFFSET"]`.
 """
 function parse_faidx(reference_index_path::AbstractString)
-    faidx = CSV.read(reference_index_path, DataFrame; delim='\t', header=["CHROM", "LENGTH", "OFFSET", "LINEBASES", "LINEWIDTH", "QUALOFFSET"], ntasks=1)
+    faidx = CSV.read(reference_index_path, DataFrame; delim='\t', header=["CHROM", "LENGTH", "OFFSET", "LINEBASES", "LINEWIDTH", "QUALOFFSET"], ntasks=1, stringtype=String)
     faidx[!, :CHROM] = [String(s) for s in faidx.CHROM]
     faidx
 end
@@ -455,6 +455,10 @@ function vcf_load_overlapped(vcf_path::AbstractString, db_vcf_parsed::DataFrame)
     end
     close(vcf_io)
     
+    unique_string_reference!(CHROM; sorted = true)
+    unique_string_reference!(SAMPLE; sorted = true)
+    unique_string_reference!(DEPTH; sorted = true)
+
     vcf_df = DataFrame(
         :CHROM => CHROM,
         :POS => POS,

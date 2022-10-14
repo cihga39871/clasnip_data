@@ -172,19 +172,17 @@ program_vcf2mlst = JuliaProgram(
 		"VCF",
 		"DB_VCF_JLD2",
 		"OUT_PREFIX" => "<VCF>.mlst",
-		"keep_mlst" => false => Bool
+		"WRITE_MLST" => Bool => true
 	],
 	outputs = [
 		"MLST_ALL_TABLE" => "<OUT_PREFIX>.all.txt",
 		"MLST_PARTIAL_TABLE" => "<OUT_PREFIX>.partial.txt",
 		"MLST_RES_TABLE" => "<OUT_PREFIX>.classification_result.txt",
-		"mlst" => false,
 		"identity_res" => false
 	],
 	main = (in, out) -> begin
-		out, mlst, identity_res = ClasnipPipeline.clasnip_vcf2mlst(in["VCF"], in["DB_VCF_JLD2"]; outprefix=in["OUT_PREFIX"])
+		out, identity_res = ClasnipPipeline.clasnip_vcf2mlst(in["VCF"], in["DB_VCF_JLD2"]; outprefix=in["OUT_PREFIX"], write_mlst = in["WRITE_MLST"])
 		out = convert(Dict{String,Any}, out)
-		out["mlst"] = in["keep_mlst"] ? mlst : false
 		out["identity_res"] = identity_res
 		out
 	end
@@ -196,20 +194,17 @@ program_vcf2mlst_with_cv_db = JuliaProgram(
 		"VCF",
 		"db_vcf_jld2_path_AB" => String,
 		"db_reverse" => Bool,
-		"OUT_PREFIX" => "<VCF>.mlst",
-		"keep_mlst" => false => Bool
+		"OUT_PREFIX" => "<VCF>.mlst"
 	],
 	outputs = [
 		"MLST_ALL_TABLE" => "<OUT_PREFIX>.all.txt",
 		"MLST_PARTIAL_TABLE" => "<OUT_PREFIX>.partial.txt",
 		"MLST_RES_TABLE" => "<OUT_PREFIX>.classification_result.txt",
-		"mlst" => false,
 		"identity_res" => false
 	],
 	main = (in, out) -> begin
-		out, mlst, identity_res = ClasnipPipeline.clasnip_vcf2mlst_with_cv_db(in["VCF"], in["db_vcf_jld2_path_AB"]; db_reverse=in["db_reverse"], outprefix=in["OUT_PREFIX"])
+		out, identity_res = ClasnipPipeline.clasnip_vcf2mlst_with_cv_db(in["VCF"], in["db_vcf_jld2_path_AB"]; db_reverse=in["db_reverse"], outprefix=in["OUT_PREFIX"], write_mlst = false)
 		out = convert(Dict{String,Any}, out)
-		out["mlst"] = in["keep_mlst"] ? mlst : false
 		out["identity_res"] = identity_res
 		out
 	end

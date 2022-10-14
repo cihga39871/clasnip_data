@@ -81,10 +81,16 @@ module.exports = function (/* ctx */) {
     devServer: {
       https: false,
       port: 9600,
-      open: false // caution: only port 9890 can connect to server when nginx enabled and include ../nginx_server.conf correctly. 
+      open: false, // caution: only port 9890 can connect to server when nginx enabled and include ../nginx_server.conf correctly. 
       // Or: edit /src/boot/global_variables_private.js to include the following:
-      // import Vue from 'vue'
-      // Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
+      // before: function (app, server, compiler) {
+      //   app.use('/', function (req, res,next) {
+      //       // console.log(`${Object.keys(req.headers)} - ${req.method} - ${req.originalUrl}`)
+      //       console.log(`${req.headers['x-forwarded-for']} - ${req.headers['x-real-ip']} - ${req.method} - ${req.originalUrl}`)
+      //       next()
+      //   })
+      // }
+
     },
 
     // https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-framework

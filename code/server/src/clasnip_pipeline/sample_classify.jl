@@ -5,29 +5,7 @@ Clasnip pipeline for sample classification (from fasta to vcf). Return `Dict{Str
 
 - `fail_info_path::Union{Nothing,AbstractString}`: if classification failed but can be handled, fail information will write to the file if it is not `nothing`.
 """
-function clasnip_classify(fasta::AbstractString, reference_genome::AbstractString, db_vcf::AbstractString; resume::Bool = true, clean::Bool = false, log_file = nothing, fail_info_path = nothing, dir="")
-    @static if false
-        cd("/home/jc/ClasnipWebData/analysis/188e5fd3-8149-5d39-b4b8-8ecf07493196/analysis/clso_v5_16-23s")
-        resume = true
-		log_file = nothing
-        fasta = "seq.fasta"
-        reference_genome = "/home/jc/ClasnipWebData/database/clso_v5_16_23s/JX624236.1.23S.CLso-HA.fasta"
-        db_vcf = "/home/jc/ClasnipWebData/database/clso_v5_16_23s/database.jl-v1.7.2.db-vcf.reduced.jld2"
-
-        cd("/home/jc/test/Clasnip/data/test")
-        resume = true
-        fasta = "KY619992.1.16S.CLso-HE.fasta"
-        fasta = "JF811599.1.50S.CLso-HB.fasta"
-        fasta = "EU834131.1.50S.CLso-HA.fasta"
-        reference_genome = "/home/jc/test/Clasnip/data/GCA_000183665.1_ASM18366v1/GCA_000183665.1_ASM18366v1_genomic.fasta"
-        db_vcf = "/home/jc/test/Clasnip/data/CLso_genes/haplotypes/GCA_000183665.1_ASM18366v1_genomic.db-vcf.jld2"
-
-		cd("/mnt/raid1-1/jiacheng/CLso/sanger_sequencing-results_SCL-EC-4846-M5,M9")
-		resume = true
-		fasta = "A12_9R_1392.ab1.fa"
-		reference_genome = "/usr/database/processed/polychrome_classifier/genomes/Liberibacter/Candidatus_Liberibacter_solanacearum/HB/GCA_000183665.1_ASM18366v1/GCA_000183665.1_ASM18366v1_genomic.fasta"
-        db_vcf = "/usr/database/processed/CLso_genes/haplotypes/GCA_000183665.1_ASM18366v1_genomic.jl-v1.6.1.db-vcf.reduced.jld2"
-    end
+function clasnip_classify(fasta::AbstractString, reference_genome::AbstractString, db_vcf::AbstractString; resume::Bool = true, write_mlst::Bool = true, clean::Bool = false, log_file = nothing, fail_info_path = nothing, dir="")
 
 	if dir != ""
 		dir_backup = pwd()
@@ -40,19 +18,19 @@ function clasnip_classify(fasta::AbstractString, reference_genome::AbstractStrin
     
 	# fa 2 fq
     input_of_fa2fq = Dict("FASTA" => fasta)
-	success, output_of_fa2fq = run(program_fa2fq, input_of_fa2fq; run_args...)
+	success, output_of_fa2fq = run(ClasnipPipeline.program_fa2fq, input_of_fa2fq; run_args...)
 	# out: FASTQ
 	yield()
 
     # bowtie2
     output_of_fa2fq["REF"] = reference_genome
-    success, output_of_bowtie2 = run(program_bowtie2, output_of_fa2fq; run_args...)
+    success, output_of_bowtie2 = run(ClasnipPipeline.program_bowtie2, output_of_fa2fq; run_args...)
 	# out: BAM, BAM.bai
 	yield()
 
     # freebayes to vcf
     output_of_bowtie2["REF"] = reference_genome
-    success, output_of_freebayes = run(program_freebayes, output_of_bowtie2; run_args...)
+    success, output_of_freebayes = run(ClasnipPipeline.program_freebayes, output_of_bowtie2; run_args...)
 	# out: VCF, VCF.mlst.all.txt
 	yield()
 
@@ -64,8 +42,8 @@ function clasnip_classify(fasta::AbstractString, reference_genome::AbstractStrin
 	end
 
     # vcf 2 mlst
-    output_of_mlst, mlst, identity_res = Pipelines.redirect_to_files(log_file; mode="a+") do
-		clasnip_vcf2mlst(str(output_of_freebayes["VCF"]), db_vcf; resume = resume, identity_distribution_jld2 = identity_distribution_jld2, fail_info_path = fail_info_path)
+    output_of_mlst, identity_res = Pipelines.redirect_to_files(log_file; mode="a+") do
+		ClasnipPipeline.clasnip_vcf2mlst(str(output_of_freebayes["VCF"]), db_vcf; resume = resume, identity_distribution_jld2 = identity_distribution_jld2, fail_info_path = fail_info_path, write_mlst = write_mlst)
 	end
 
 	if clean
@@ -87,7 +65,7 @@ function clasnip_classify(fasta::AbstractString, reference_genome::AbstractStrin
     return output_of_mlst
 end
 
-function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf::AbstractString; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing, fail_info_path = nothing)
+function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf::AbstractString; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing, fail_info_path = nothing, write_mlst::Bool = true)
 
 	@info Pipelines.timestamp() * "clasnip_vcf2mlst: Loading database for Clasnip SNP statistics." vcf_path
 
@@ -95,10 +73,10 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf::AbstractString; outp
 
     db_vcf_parsed, groups, group_dict, nsample_group = clasnip_get_all(db_vcf);
 
-	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume, identity_distribution_jld2 = identity_distribution_jld2, fail_info_path = fail_info_path)
+	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume, identity_distribution_jld2 = identity_distribution_jld2, fail_info_path = fail_info_path, write_mlst = write_mlst)
 end
 
-function clasnip_vcf2mlst_with_cv_db(vcf_path::AbstractString, db_vcf_jld2_path_AB::AbstractString; db_reverse::Bool = false, outprefix = vcf_path * ".mlst", resume::Bool = true)
+function clasnip_vcf2mlst_with_cv_db(vcf_path::AbstractString, db_vcf_jld2_path_AB::AbstractString; db_reverse::Bool = false, outprefix = vcf_path * ".mlst", resume::Bool = true, write_mlst::Bool = false)
 
 	@info Pipelines.timestamp() * "clasnip_vcf2mlst_with_cv_db: Loading CV database for Clasnip SNP statistics." vcf_path
 
@@ -109,15 +87,15 @@ function clasnip_vcf2mlst_with_cv_db(vcf_path::AbstractString, db_vcf_jld2_path_
 		error("Nothing was returned in get_clasnip_cv_db_elements(\"$db_vcf_jld2_path_AB\", $db_reverse)")
 	end
 
-	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume)
+	clasnip_vcf2mlst(vcf_path, db_vcf_parsed, groups, group_dict, nsample_group; outprefix = outprefix, resume = resume, write_mlst = write_mlst)
 end
 
-function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, groups::Vector, group_dict::Dict, nsample_group::Dict; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing, fail_info_path = nothing)
+function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, groups::Vector, group_dict::Dict, nsample_group::Dict; outprefix = vcf_path * ".mlst", resume::Bool = true, identity_distribution_jld2 = nothing, fail_info_path = nothing, write_mlst::Bool = true)
 	@info Pipelines.timestamp() * "Started: Clasnip SNP statistics."
 
 	# outfiles
 	mlst_all_file = ""  # this file will not be generated anymore
-	mlst_partial_file = "$outprefix.partial.txt"
+	mlst_partial_file = ifelse(write_mlst, "$outprefix.partial.txt", "")
 	identity_res_file = "$outprefix.classification_result.txt"
 
 	isdir(dirname(outprefix)) || mkpath(dirname(outprefix), mode=0o755)
@@ -145,7 +123,7 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, gr
 
 		return Dict{String, Cmd}(
 	        "MLST_ALL_TABLE" => `$mlst_all_file`,
-	        "MLST_PARTIAL_TABLE" => `$mlst_partial_file`,
+	        "MLST_PARTIAL_TABLE" => `""`,
 	        "MLST_RES_TABLE" => `$identity_res_file`
 	    ), mlst, identity_res
 	end
@@ -171,12 +149,17 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, gr
 
     # filter: at least two haplotypes
     filter!(:ALT2PROBs => d -> length(keys(d)) > 1, mlst)  #TODO: remove when all database contain the filtration.
-    CSV.write(mlst_partial_file, select(mlst, Not(:ALT2PROBs)); delim='\t')
+	if write_mlst
+    	CSV.write(mlst_partial_file, select(mlst, Not(:ALT2PROBs)); delim='\t')
+	end
 
 	@info Pipelines.timestamp() * "Computing identity."
 
 	# compute identity for each group
     identity_res = @time ClasnipPipeline.compute_identity(mlst, groups)
+
+	# empty mlst to reduce memory
+	empty!(mlst)
 
 	# compute P value if identity_distribution_jld2 is not nothing
 	if !isnothing(identity_distribution_jld2)
@@ -217,7 +200,7 @@ function clasnip_vcf2mlst(vcf_path::AbstractString, db_vcf_parsed::DataFrame, gr
         "MLST_ALL_TABLE" => `$mlst_all_file`,
         "MLST_PARTIAL_TABLE" => `$mlst_partial_file`,
         "MLST_RES_TABLE" => `$identity_res_file`
-    ), mlst, identity_res
+    ), identity_res
 end
 
 function compute_identity(mlst::DataFrame, groups::Vector)

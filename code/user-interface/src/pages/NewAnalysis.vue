@@ -91,7 +91,12 @@ GTTGATGGGGTCATTTGAGTTTATGTTAAGGGCCCATAGCTCAGGCGGTTAGAGTGCACCCCTGATAAGGGTGAGGTCGG
               text-color="primary"
               class="q-mr-md"
             >
-              {{ scope.opt.dbInfo.taxonomyName }} ({{ scope.opt.dbInfo.region }})
+              {{ scope.opt.dbInfo.taxonomyName }},
+              <div class="text-green-9 q-pl-xs">
+                {{ Object.keys(scope.opt.dbInfo.groups).length }}
+                {{ scope.opt.dbInfo.groupBy }}
+                ({{ scope.opt.dbInfo.region }})
+              </div>
               <div class="q-ml-sm text-grey">[{{ scope.opt.dbInfo.date}}]</div>
             </q-chip>
             </div>

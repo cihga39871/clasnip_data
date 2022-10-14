@@ -13,8 +13,8 @@
             </span>
             <span>
               <q-btn
-                class="q-ml-md"
                 v-if="!autoLoad && (fileData === null || allowReload)"
+                class="q-ml-md"
                 size="sm"
                 color="white"
                 :flat="flat ? true : false"
@@ -40,9 +40,8 @@
             />
           </div>
 
-          <div class="col-2 q-pr-sm" v-if="fileData !== null">
+          <div class="col-2 q-pr-sm" v-if="fileData !== null && (filter || isClassificationSummary)">
             <q-input
-              v-if="filter"
               outlined
               dense
               v-model="localFilterValue"
@@ -50,9 +49,8 @@
             />
           </div>
 
-          <div class="col-2" v-if="fileData !== null">
+          <div class="col-2" v-if="fileData !== null && (rowData.length > 0 || filter || isClassificationSummary)">
             <q-select
-              v-if="fileData !== null"
               v-model="visibleColumns"
               multiple
               outlined

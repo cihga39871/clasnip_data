@@ -39,6 +39,7 @@ function activate_dev_mode()
     global USER_DIR = USER_DIR_DEV
     global ANALYSIS_DIR = ANALYSIS_DIR_DEV
     global DB_DIR = DB_DIR_DEV
+    global FILE_VIEWER_LIMIT_GENERAL = FILE_VIEWER_LIMIT_GENERAL_DEV
     global LOG_FOLDER = LOG_FOLDER_DEV
     global OUT_FILE = OUT_FILE_DEV
     global ERR_FILE = ERR_FILE_DEV

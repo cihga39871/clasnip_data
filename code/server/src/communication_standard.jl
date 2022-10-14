@@ -61,6 +61,8 @@ end
 
 json_response = response_with_header
 
+server_notfound() = mux(req -> response_with_header(req, 404; data = "Not found", content_type = "text/html"))
+
 format_response_body(data::Dict) = json(data)
 format_response_body(data::Vector{UInt8}) = data
 format_response_body(data::Vector) = json(data)
@@ -93,11 +95,27 @@ function get_request_data!(request)
 	end
 end
 
-# ClasnipMux.print_request(request)
+"""
+	get_request_ips(request::Dict)
+
+If HTTP_X_FORWARDED_FOR is filled out, it should include the clients real IP AND any proxy IP's they trsversed to get to your site as a comma seperated list. Never treat it as if it will always be just a single IP (even though most often it is).
+
+So if no proxys were involved, they would match, but if a proxy were involved, then HTTP_X_FORWARDED_FOR might look like this:
+
+realclientIP, 1st_proxyIP, 2nd_proxyIP, last_proxyIP	
+"""
+function get_request_ips(request::Dict)
+	headers = get(request, :headers, nothing)
+	if headers === nothing
+		return ""
+	end
+	get(request[:headers], "X-Forwarded-For", "")
+end
 
 function print_request(request::Dict, status::Int)
 	str = string(
-		now(), " ",
+		now(),
+		" - ", get_request_ips(request), " - ",
 		string(get(request, :uri, "")),
 		" [", get(request, :method, ""), " ", string(status), "] ",
 		get(HTTP.Messages.STATUS_MESSAGES, status, status), "\n"
@@ -131,7 +149,8 @@ function print_request(request::Dict, status::Int)
 end
 function print_request_no_body(request::Dict, status::Int)
 	str = string(
-		now(), " ",
+		now(),
+		" - ", get_request_ips(request), " - ",
 		string(get(request, :uri, "")),
 		" [", get(request, :method, ""), " ", string(status), "] ",
 		get(HTTP.Messages.STATUS_MESSAGES, status, status), "\n"

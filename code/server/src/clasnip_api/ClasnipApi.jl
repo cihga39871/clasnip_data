@@ -37,7 +37,8 @@ init_clasnip_db_info, api_get_database,
 get_db_info, get_user_friendly_db_name
 
 include("new_analysis_api.jl")
-export api_new_analysis, api_new_analysis_multi_db
+export api_new_analysis, api_new_analysis_multi_db,
+get_seq_dir, get_analysis_dir
 
 include("report_api.jl")
 export api_report_query, api_multi_report_query
@@ -52,7 +53,8 @@ include("user_api.jl")
 export api_user_dir_list, api_rm_clasnip_database
 
 include("server_control.jl")
-export api_dynamic_key, api_update_database, api_revise_retry
+export api_dynamic_key, api_update_database, api_revise_retry,
+update_database
 
 function __init__()
     init_clasnip_db_info(rm_invalid=true)

@@ -46,7 +46,7 @@ function run_server(; host = Config.HOST, port = Config.PORT)
 		route("/cnpctl/revise_retry", api_dynamic_key, api_revise_retry),
 
 		route("/cnptst/echo", req -> response_with_header(req, 200, data = req)),
-		Mux.notfound()
+		server_notfound()
 	)
 	@info "Mux server is running at http://localhost:$(port)"
 	# SERVER_TASK = serve(backend_server, host, port)

@@ -68,7 +68,7 @@ function vcf_load(vcf_path::AbstractString)
     )
 
     # load vcf
-    df = CSV.read(vcf_contents, DataFrame, header=header, types=col_types, delim='\t', ntasks=1)
+    df = CSV.read(vcf_contents, DataFrame, header=header, types=col_types, delim='\t', ntasks=1, stringtype=String)
 
     ### remove rows without proper FORMAT
     all_formats = countmap(df.FORMAT)
@@ -610,23 +610,23 @@ function parsed_db_vcf_to_mlst!(db_vcf_parsed::DataFrame, groups::Vector; remain
     end
 end
 
-function overlap(db_vcf_parsed::DataFrame, record::GFF3.Record; variants_only::Bool=true, remain_alt2probs::Bool=false)
-    res = @linq db_vcf_parsed |>
-        where(:CHROM .== GFF3.seqid(record),
-              :POS .>= GFF3.seqstart(record),
-              :POS .<= GFF3.seqend(record))
+# function overlap(db_vcf_parsed::DataFrame, record::GFF3.Record; variants_only::Bool=true, remain_alt2probs::Bool=false)
+#     res = @linq db_vcf_parsed |>
+#         where(:CHROM .== GFF3.seqid(record),
+#               :POS .>= GFF3.seqstart(record),
+#               :POS .<= GFF3.seqend(record))
 
-    # relative position
-    offset = minimum(res[!,:POS]) - 1
-    res.OFFSET = res[!,:POS] .- offset
+#     # relative position
+#     offset = minimum(res[!,:POS]) - 1
+#     res.OFFSET = res[!,:POS] .- offset
 
-    if variants_only
-        res = @linq res |> where(length.(:ALT2PROBs) .> 1)
-    end
+#     if variants_only
+#         res = @linq res |> where(length.(:ALT2PROBs) .> 1)
+#     end
 
-    if remain_alt2probs
-        select!(res, [ncol(res), 1, 2, 3, 4, (5:ncol(res)-1)...])
-    else
-        select!(res, [ncol(res), 1, 2, 3, (5:ncol(res)-1)...])
-    end
-end
+#     if remain_alt2probs
+#         select!(res, [ncol(res), 1, 2, 3, 4, (5:ncol(res)-1)...])
+#     else
+#         select!(res, [ncol(res), 1, 2, 3, (5:ncol(res)-1)...])
+#     end
+# end

@@ -17,6 +17,8 @@
 
 - `464`: file too large.
 
+- `477`: Fail to read file as table.
+
 - `200`: data is the file content.
 
 """
@@ -75,9 +77,9 @@ function api_file_viewer(request;
 
     if to_quasar_table
         df = try
-            CSV.read(file_path, DataFrame; ntasks=1)
+            CSV.read(file_path, DataFrame; ntasks=1, stringtype=String)
         catch
-            return json_response(request, 463)
+            return json_response(request, 477)
         end
 
         columns = [Dict(
@@ -210,7 +212,7 @@ function api_classification_results_viewer(request;
 
     dfs = try
         map(file_paths) do file_path
-            CSV.read(file_path, DataFrame; ntasks=1)
+            CSV.read(file_path, DataFrame; ntasks=1, stringtype=String)
         end
     catch
         return json_response(request, 463)

@@ -8,6 +8,7 @@
       <div class="col-auto q-pr-lg">
         <div class="row q-pb-sm"> Database ID </div>
         <div class="row q-pb-sm"> Taxonomy </div>
+        <div class="row q-pb-sm"> Group By </div>
         <div class="row q-pb-sm"> Region </div>
         <div class="row q-pb-sm"> Reference Sequence </div>
         <div class="row q-pb-sm"> Created By </div>
@@ -16,6 +17,7 @@
       <div class="col text-grey-9">
         <div class="row q-pb-sm"> {{ dbName }} </div>
         <div class="row q-pb-sm"> {{ taxonomyName }} ({{ taxonomyRank }}) </div>
+        <div class="row q-pb-sm"> {{ groupBy }} </div>
         <div class="row q-pb-sm"> {{ region }} ({{ dbType }}) </div>
         <div class="row q-pb-sm"> {{ refGenome }} </div>
         <div class="row q-pb-sm"> {{ owner }} </div>
@@ -28,7 +30,7 @@
     </div>
     <div class="row">
         <div class="col-4 col-lg-3 q-pb-sm q-pt" v-for="group in Object.keys(groups).sort()" :key="group">
-          ⋅ {{ group.replace(/[^A-Za-z0-9]/g, " ") }}
+          ⋅ {{ group.replace(/[^A-Za-z0-9\-\.]/g, " ") }}
         </div>
     </div>
 
@@ -119,7 +121,7 @@
           "
         />
 
-        <div v-if="dbType == 'single gene'">
+        <div v-if="dbType === 'single gene' || dbType === 'genomic - all samples are assemblies'">
           <table-viewer
             label="Classification Performance"
             :link="dbPath + '/stat.classifier_performance' + classificationPerformanceOption + '.txt'"
@@ -244,6 +246,7 @@ export default {
     refGenome: { default: null },
     dbType: { default: null },
     region: { default: null },
+    groupBy: { default: 'groups' },
     taxonomyRank: { default: null },
     taxonomyName: { default: null },
     date: { default: '0000-00-00' },

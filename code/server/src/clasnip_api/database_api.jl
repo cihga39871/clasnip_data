@@ -141,6 +141,9 @@ function api_upload_database(request)
     mkpath(decompress_to, mode=0o750)
     decompress(downloaded_file, outdir=decompress_to, force=true, as_file=false)
 
+    # Replace special characters in dir and file names under `dirpath` to '_' recursively.
+    path_replace_special_chars(decompress_to)
+    
     # check fasta
     fas = scan_database_fasta(decompress_to)
     code_fas = code_database_fasta(fas)
@@ -250,6 +253,24 @@ function DbFasta(filepath; hided_dirpath::String="")
     )
 end
 
+"""
+    path_replace_special_chars(dirpath)
+
+Replace special characters in dir and file names under `dirpath` to '_' recursively.
+"""
+function path_replace_special_chars(dirpath)
+    for (root, dirs, files) in walkdir(dirpath; topdown=false)
+        for f in [dirs; files]
+            name_no_special = replace(f, r"[^A-Za-z0-9\.\-\_]" => "_")
+            if name_no_special != f
+                new_path = no_repeat_path(joinpath(root, name_no_special))
+                old_path = joinpath(root, f)
+                mv(old_path, new_path)
+            end
+        end
+    end
+end
+
 function scan_database_fasta(dirpath; hide_prefix::Bool=true)
     fs = Vector{DbFasta}()
     hide_arg = hide_prefix ? dirpath : ""
@@ -306,11 +327,16 @@ end
 - `username`: localStorage.getItem('username'),
 - `dbName`: database name. Error code see `?check_database_name`.
 - `dbServerPath`: database path on server. Has clasinp database 467. Not created 400. Missing 400.
-- `dbType`: one of genomic, multiple genes, single gene. Invalid and missing 400.
+- `dbType`: one of genomic, multiple genes, single gene, genomic - all samples are assemblies. Invalid and missing 400.
 - `refGenome`: reference genome for the database. Invalid or missing 400.
 - `region`: database region. eg: "genomic", "16s RNA", "multiple genes". Missing: 400. Invalid: 456.
 - `taxonomyRank`: one of "strain", "species", "genus". Invalid and missing 400.
 - `taxonomyName`: Missing: 400. Invalid: 456.
+- `groupBy`: default is "group". Invalid: 456.
+
+# Situations
+
+- Do cross validation only when `db_type` in ["single gene", "genomic - all samples are assemblies"]
 
 # Example
 ```julia
@@ -328,6 +354,7 @@ data:
   region: "genomic"
   taxonomyName: "CLso"
   dbServerPath: "clso_v5_genomic_clasnip2"
+  groupBy: "groups"
 ```
 """
 function api_create_database(request)
@@ -363,6 +390,7 @@ function api_create_database(request)
     region = get(data, "region", "")
     taxonomy_rank = get(data, "taxonomyRank", "")
     taxonomy_name = get(data, "taxonomyName", "")
+    group_by = get(data, "groupBy", "groups")
     date = replace(string(now()), r"T.*" => "") # 2022-03-28
 
 
@@ -389,13 +417,13 @@ function api_create_database(request)
         return json_response(request, 400)
     end
 
-    if !(db_type in ["genomic", "multiple genes", "single gene"])
+    if !(db_type in ["genomic", "multiple genes", "single gene", "genomic - all samples are assemblies"])
         return json_response(request, 400)
     end
-    do_cross_validation = db_type == "single gene"
+    do_cross_validation = db_type in ["single gene", "genomic - all samples are assemblies"]
 
     if region == "" || occursin(r"[^A-Za-z0-9\-\_ \(\)]", region)
-        return json_response(request, 400)
+        return json_response(request, 456)
     end
 
     if !(taxonomy_rank in ["strain", "species", "genus"])
@@ -403,7 +431,11 @@ function api_create_database(request)
     end
 
     if taxonomy_name == "" || occursin(r"[^A-Za-z0-9\-\_ \(\)]", taxonomy_name)
-        return json_response(request, 400)
+        return json_response(request, 456)
+    end
+
+    if group_by == "" || occursin(r"[^A-Za-z0-9\-\_ \(\)]", group_by)
+        return json_response(request, 456)
     end
 
     # check fasta
@@ -450,7 +482,7 @@ function api_create_database(request)
                 db_wrapper_job
             end
             register_job = Job(
-                @task(register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type, region, taxonomy_rank, taxonomy_name, date)),
+                @task(register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type, region, taxonomy_rank, taxonomy_name, group_by, date)),
                 name="Register Database: $db_name",
                 user=owner,
                 dependency=[DONE => last_job]
@@ -480,7 +512,7 @@ function api_create_database(request)
     ))
 end
 
-function register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type, region, taxonomy_rank, taxonomy_name, date)
+function register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type, region, taxonomy_rank, taxonomy_name, group_by, date)
 
     # get db accuracy
     @load joinpath(db_path, "stat.identity_distributions.jld2") db_accuracy
@@ -497,6 +529,7 @@ function register_database(db_name, db_path, db_prefix, ref, fas, owner, db_type
             "region" => region,
             "taxonomyRank" => taxonomy_rank,
             "taxonomyName" => taxonomy_name,
+            "groupBy" => group_by,
             "date" => date
         )
     )

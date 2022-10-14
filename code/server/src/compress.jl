@@ -16,7 +16,7 @@ function decompress(file; outdir=nothing, unchange::Bool=true, force::Bool=false
         return nothing
     end
     # output dir
-    if outdir != nothing
+    if outdir !== nothing
         try
             mkpath(outdir, mode=0o755)
         catch
@@ -66,7 +66,7 @@ function decompress(file; outdir=nothing, unchange::Bool=true, force::Bool=false
     # not compressed file, return in the else block.
     else
         showwarn && @warn "Decompress: Uncompressed file or unknown compress type" FILE=file
-        if outdir == nothing
+        if outdir === nothing
             return file
         else
             new_file = joinpath(outdir, basename(file))
@@ -82,7 +82,7 @@ function decompress(file; outdir=nothing, unchange::Bool=true, force::Bool=false
 
     end
 
-    if new_file == nothing
+    if new_file === nothing
         @error "Decompress: Failed" FILE=file
         return nothing
     end
@@ -183,7 +183,7 @@ function _decompress_specific(file, outdir, possible_extension, new_extension, c
     end
 
     # change directory to outdir
-    if outdir != nothing
+    if outdir !== nothing
         new_file = joinpath(outdir, basename(new_file))
     end
 
@@ -229,11 +229,11 @@ function _decompress_tar(file, outdir, force::Bool)
     end
 
 
-    if outdir != nothing
+    if outdir !== nothing
         new_file = joinpath(outdir, basename(new_file))
     end
 
-    cmd = outdir == nothing ? `tar -xf $file` : `tar -xf $file -C $outdir`
+    cmd = outdir === nothing ? `tar -xf $file` : `tar -xf $file -C $outdir`
     cmd = force ? cmd : `$cmd --keep-old-files`
     try
         run(cmd)

@@ -176,7 +176,7 @@ function save_sequence(seq::AbstractString)
     end
     headers = headers[perm]
 
-    seq_dir = joinpath(Config.ANALYSIS_DIR, seq_uuid5)
+    seq_dir = get_seq_dir(seq_uuid5)
     seq_file = joinpath(seq_dir, "seq.$seq_uuid5.fasta")
     if isdir(seq_dir) && isfile(seq_file)
         return seq_uuid5, seq_dir, seq_file
@@ -193,4 +193,26 @@ function save_sequence(seq::AbstractString)
     close(seq_io)
 
     return seq_uuid5, seq_dir, seq_file
+end
+
+function get_seq_dir(seq_uuid::String)
+    # seq_dir = joinpath(Config.ANALYSIS_DIR, seq_uuid)
+    # if isdir(seq_dir)
+    #     return seq_dir
+    # end
+    # new dir
+    sub1 = seq_uuid[1:2]
+    sub2 = seq_uuid[3:4]
+    seq_dir = joinpath(Config.ANALYSIS_DIR, sub1, sub2, seq_uuid)
+end
+
+function get_analysis_dir(seq_uuid::AbstractString, db_server_basename::AbstractString)
+    # analysis_dir = joinpath(Config.ANALYSIS_DIR, seq_uuid, "analysis", db_server_basename)
+    # if isdir(analysis_dir)
+    #     return analysis_dir
+    # end
+    # new dir
+    sub1 = seq_uuid[1:2]
+    sub2 = seq_uuid[3:4]
+    analysis_dir = joinpath(Config.ANALYSIS_DIR, sub1, sub2, seq_uuid, "analysis", db_server_basename)
 end

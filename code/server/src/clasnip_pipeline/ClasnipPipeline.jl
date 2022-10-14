@@ -19,7 +19,7 @@ using Distances, Clustering # heatmap
 using CSV
 using JLD2
 using StatsBase, AverageShiftedHistograms, Random # statistics, density and p values
-using GFF3
+# using GFF3
 using FASTX # fa2fq
 
 # plotlyjs()

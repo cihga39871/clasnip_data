@@ -146,14 +146,3 @@ function get_job_ids(s::AbstractString)
         job_ids = split(m.match, ".", keepempty=false)
     end
 end
-
-function get_analysis_dir(seq_uuid::AbstractString, db_server_basename::AbstractString)
-    analysis_dir = joinpath(Config.ANALYSIS_DIR, seq_uuid, "analysis", db_server_basename)
-    if isdir(analysis_dir)
-        return analysis_dir
-    end
-    # new dir
-    sub1 = seq_uuid[1:2]
-    sub2 = seq_uuid[3:4]
-    analysis_dir = joinpath(Config.ANALYSIS_DIR, sub1, sub2, seq_uuid, "analysis", db_server_basename)
-end
