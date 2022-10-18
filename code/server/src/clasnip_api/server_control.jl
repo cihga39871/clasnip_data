@@ -26,7 +26,7 @@ end
 """
     update_database()
 
-After removing database files on server, maintainer have to call it to sync in-memory database.
+After manually removing database files on server, maintainer have to call it to sync in-memory database.
 """
 function update_database()
     # add new database to Config, do not remove old
@@ -42,7 +42,7 @@ function update_database()
         end
     end
     for name in name_to_delete
-        init_clasnip_db_info(name)
+        delete!(CLASNIP_DB_INFO, name)
     end
 
     # clean sensitive data for new_analysis_api

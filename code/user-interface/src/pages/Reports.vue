@@ -81,7 +81,7 @@
             <template v-slot:avatar>
               <q-icon name="info" color="primary" />
             </template>
-            The sample is compared against multiple databases. Do you want to combine or seperate the classification summary?
+            The sample is compared against multiple databases. You can combine or seperate the classification summary.
             <template v-slot:action>
               <span class="text-grey-8 text-caps">SEPERATE</span>
               <q-toggle v-model="combineClassificationResults" />
@@ -103,7 +103,7 @@
         </div>
 
         <div v-if="classificationResults.length > 0">
-          <q-slide-transition>
+          <q-slide-transition v-if="classificationResults.length > 1">
             <div v-show="combineClassificationResults">
               <div class="row">
                 <div class="col q-pb-md">
@@ -225,13 +225,13 @@ export default {
       jobs: [],
       logs: [],
       classificationResults: [],
-      combineClassificationResults: false,
+      combineClassificationResults: true,
       mlstTables: [],
       failInfo: [],
 
       probability: 0.05,
 
-      helpClassificationSummary: '<span class="text-primary">PERCENT_MATCHED: </span> sequence identity, the ratio of MATCHED_SNP_SCORE and COVERED_SNP_SCORE.<br/><br/><span class="text-primary">MATCHED_SNP_SCORE: </span> sum of scores of all matched SNPs.<br/><br/><span class="text-primary">COVERED_SNP_SCORE: </span> sum of scores of all matched and unmatched SNPs.<br/><br/><span class="text-primary">CDF: </span> the cumulated density where PERCENT_MATCHED falls in which quantile of estimated distribution of LABELED_GROUP samples in database.<br/><br/><span class="text-primary">PROBABILITY: </span> the probability of the sample is classified to LABELED_GROUP.<br/><br/>          If the deviation of two groups\' PERCENT_MATCHED are small, please double-check the exact SNP variations in the MLST table. <br/><br/>If COVERED_SNP_SCORE is small, it probably means insufficient SNPs were covered by your query sequences, so PERCENT_MATCHED may be stochastic and not predicted precisely.<br/><br/> The classification accuracy is based on your query sequences and the public database, and not guaranteed by Clasnip.',
+      helpClassificationSummary: '<span class="text-primary">PERCENT_MATCHED: </span> sequence identity. The ratio of MATCHED_SNP_SCORE and COVERED_SNP_SCORE.<br/><br/><span class="text-primary">MATCHED_SNP_SCORE: </span> sum of scores of all matched SNPs.<br/><br/><span class="text-primary">COVERED_SNP_SCORE: </span> SNP coverage. Sum of scores of all matched and unmatched SNPs.<br/><br/><span class="text-primary">CDF: </span> probability within GROUP. The percent of samples in this GROUP has lower sequence identity than the input sample.<br/><br/><span class="text-primary">PROBABILITY: </span> the probability of the sample is classified to LABELED_GROUP.<br/><br/>          If the deviation of two groups\' PERCENT_MATCHED are small, please double-check the exact SNP variations in the MLST table. <br/><br/>If COVERED_SNP_SCORE is small, it probably means insufficient SNPs were covered by your query sequences, so PERCENT_MATCHED may be stochastic and not predicted precisely.<br/><br/> The classification accuracy is based on your query sequences and the public database.',
 
       helpMlst: '<span class="text-primary">CHROM</span> and <span class="text-primary">POS: </span>the chromosome and position of the reference file in the database.<br/><br/><span class="text-primary">REF: </span> the base(s) of the reference.<br/><br/><span class="text-primary">GROUP COLUMNS: </span> The groups defined in the database. If a SNP is identical to REF, it will be marked as a dot. Numbers in brackets mean the SNP frequencies of all samples in the database group.<br/><br/><span class="text-primary">SAMPLE: </span> the SNP(s) of query sequences. If a SNP is identical to REF, it will be marked as a dot. <br/><br/><span class="text-primary">DEPTH: </span>can be ignored in most cases. The query sequences are cut to 120-bp subsequences, and DEPTH is the number of subsequences mapped to the location. If SAMPLE is not identical to REF, multiple depths are shown and splitted by comma (,), indicating the depths of REF and SNPs, respectively.<br/><br/><span class="text-primary">Visible columns: </span>You can select columns of interest using the Column button on the top right of the table.'
     }
@@ -261,6 +261,11 @@ export default {
 
   methods: {
     reportQuery: function () {
+      if (this.queryString.length < 9) {
+        this.notifyError('Job ID is invalid.')
+        this.cleanReports()
+        return
+      }
       this.$axios.post(this.MUX_URL + '/cnp/multi_report_query', JSON.stringify({
         token: localStorage.getItem('token'),
         username: localStorage.getItem('username'),
@@ -286,8 +291,20 @@ export default {
       this.jobs = data.jobs
       this.logs = data.logs
       this.classificationResults = data.classificationResults
+      this.combineClassificationResults = true
       this.mlstTables = data.mlstTables
       this.failInfo = data.classificationFailInfo
+    },
+
+    cleanReports: function () {
+      this.showReports = false
+      this.reports = null
+      this.jobs = []
+      this.logs = []
+      this.classificationResults = []
+      this.combineClassificationResults = true
+      this.mlstTables = []
+      this.failInfo = []
     },
 
     getDbName: function (path) {

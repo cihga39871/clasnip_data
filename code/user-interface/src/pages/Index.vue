@@ -8,11 +8,18 @@
           src="~assets/clasnip_logo_full.svg"
         >
       </div>
-      <div class="col-12 flex justify-center q-pb-lg text-grey-9" style="text-align: center">
-        Closely-related microorganism classification based on SNPs & multilocus sequencing typing (MLST)
-        <br/>
-        <br/>
+      <div class="col-12 text-grey-9 q-py-lg" style="text-align: center">
+        <div class="q-py-sm text-weight-bold" style="font-size:1.4rem">
+          Closely-related microorganism <span class="text-light-blue-9">cla</span>ssification
+        </div>
+        <div class="q-py-sm" style="font-size:1.15rem">
+          based on <span class="text-light-blue-9">SNP</span>s & multilocus sequencing typing (MLST)
+        </div>
+        <div class="q-py-sm" style="font-size:0.95rem">
+          using rRNA, housekeeping genes, or even any genomics fragments
+        </div>
       </div>
+
       <div class="col-12 flex justify-center">
         <div class="col-auto flex justify-center q-pb-lg q-px-sm">
           <q-btn outline no-caps stack color="blue-6" to="analysis/new_analysis" class="btn-fixed-width">

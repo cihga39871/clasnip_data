@@ -29,7 +29,7 @@
 
           <div class="col-3 q-pr-sm" v-if="fileData !== null && isClassificationSummary">
             <q-select
-              label="Groups to compare"
+              label="Select groups"
               v-model="groupsToCompare"
               :options=groupOptions
               outlined
@@ -96,17 +96,24 @@
 
           <div v-if="isClassificationSummary" class="q-gutter-sm">
 
-            <div v-if="rowData.length == this.fileData.row_data.length" class="text-green">
+            <div v-if="rowData.length == groupsToCompare.length" class="text-green">
               <span>
                 <q-icon name="info" />
-                All groups are shown.
+                All selected groups are shown.
               </span>
             </div>
 
             <div v-if="rowData.length == 0" class="text-negative">
               <span>
                 <q-icon name="warning" />
-                The sample is not classified to any group under the given PROBABILITY ({{localFilterValue}}). Please decrease the PROBABILITY threshold, and check possible sequencing errors.
+                The sample is not classified to any of the selected groups of {{subtitle}} under the given PROBABILITY ({{localFilterValue}}). Please decrease the PROBABILITY threshold to display more groups. Besides, sequence errors affect PROBABILITY significantly.
+              </span>
+            </div>
+
+            <div v-if="rowData.length > 1 && rowData.length < groupsToCompare.length" class="text-negative">
+              <span>
+                <q-icon name="warning" />
+                More than two groups of are shown under the given PROBABILITY ({{localFilterValue}}). If PERCENT_MATCHED and PROBABILITY of multiple groups are similar, please double-check the exact SNP variations in the MLST table(s) below, or include more sequences from other genomic regions and re-do the analysis.
               </span>
             </div>
 
@@ -204,7 +211,8 @@ export default {
       default: (data, threshold) => data >= threshold
     },
     filterValue: {
-      default: 0.05
+      default: 0,
+      type: Number
     },
     filterValueMin: { default: null },
     filterValueMax: { default: null },
@@ -341,23 +349,37 @@ export default {
         this.fail = false
       }
     },
-    filterValue: function () {
-      if (parseFloat(this.filterValueMin) && parseFloat(this.filterValue) < parseFloat(this.filterValueMin)) {
-        this.filterValue = parseFloat(this.filterValueMin)
-        this.localFilterValue = this.filterValue
-      } else if (parseFloat(this.filterValueMax) && parseFloat(this.filterValue) > parseFloat(this.filterValueMax)) {
-        this.filterValue = parseFloat(this.filterValueMax)
-        this.localFilterValue = this.filterValue
+    filterValueMin: function () {
+      const f = parseFloat(this.filterValueMin)
+      if (!isNaN(f)) {
+        this.filterValueMin = f
       }
-      this.filterRowData()
     },
-    localFilterValue: function () {
-      if (parseFloat(this.filterValueMin) && parseFloat(this.localFilterValue) < parseFloat(this.filterValueMin)) {
-        this.localFilterValue = parseFloat(this.filterValueMin)
-      } else if (parseFloat(this.filterValueMax) && parseFloat(this.localFilterValue) > parseFloat(this.filterValueMax)) {
-        this.localFilterValue = parseFloat(this.filterValueMax)
+    filterValueMax: function () {
+      const f = parseFloat(this.filterValueMax)
+      if (!isNaN(f)) {
+        this.filterValueMax = f
       }
-      this.filterRowData()
+    },
+    filterValue: function () {
+      this.localFilterValue = this.filterValue
+    },
+    localFilterValue: function (currentStr, oldStr) {
+      const current = parseFloat(currentStr)
+      const old = parseFloat(oldStr)
+      if (isNaN(current)) {
+        this.localFilterValue = old
+      } else {
+        if (current < this.filterValueMin) {
+          this.localFilterValue = this.filterValueMin
+        } else if (current > this.filterValueMax) {
+          this.localFilterValue = this.filterValueMax
+        } else if (!/^-?[0-9]*(\.[0-9]*)?$/.test(currentStr)) {
+          // fix parseFloat('0.65abc') = 0.65
+          this.localFilterValue = current
+        }
+        this.filterRowData()
+      }
     },
     groupsToCompare: function () {
       // For classification summary only!!

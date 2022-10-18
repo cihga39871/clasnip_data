@@ -25,6 +25,10 @@ function api_multi_report_query(request)
     end
 
     query_string = get(data, "queryString", "")
+    if !(query_string isa AbstractString)
+        @warn "request vunerable?" query_string request
+        return json_response(request, 400)
+    end
     length(query_string) < 9 && (return json_response(request, 400))
 
     res = Dict{String, Any}()
@@ -33,7 +37,10 @@ function api_multi_report_query(request)
     job_ids = ClasnipApi.get_job_ids(query_string)
     if !isnothing(job_ids)
         for job_id in job_ids
-            job = job_query(parse(Int, job_id))
+            job_id_int = tryparse(Int, job_id)
+            isnothing(job_id_int) && (return json_response(request, 462))
+
+            job = job_query(job_id_int)
             if !isnothing(job)
                 push!(jobs, job)
 
