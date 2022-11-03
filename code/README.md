@@ -26,7 +26,7 @@ The following dependencies need to be installed manually and their excutables ne
 
    For example, the http block of `/etc/nginx/nginx.conf` could be:
 
-    ```conf
+    ```nginx
     http {
         #some other settings;
         include /path/to/Clasnip/nginx_server.conf;
@@ -51,10 +51,10 @@ You can also run Clasnip without Nginx installation with a simple setup:
 
 Open `user-interface/src/boot/globalVariables.js`, and change `MUX_URL` to the URL of the server:
 
-    ```javascript
-    // file user-interface/src/boot/globalVariables.js
-    Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
-    ```
+```javascript
+// file user-interface/src/boot/globalVariables.js
+Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
+```
 
 If you want to use Clasnip from different local devices, you need to change 0.0.0.0 to the server's local IP address (usually starts with 192.*).
 
