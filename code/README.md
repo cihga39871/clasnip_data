@@ -7,7 +7,7 @@ Closely-related microorganism classification based on SNPs & multilocus sequenci
 ### Dependency
 
 - 64-bit Linux system. Other Unix-like systems may work but are not tested.
-- [Nginx ^1.22](https://nginx.org/en/download.html): an HTTP and reverse proxy server.
+- [Nginx ^1.22](https://nginx.org/en/download.html) (optional): an HTTP and reverse proxy server.
 
 The following dependencies need to be installed manually and their excutables need to be found directly in PATH.
 
@@ -19,6 +19,8 @@ The following dependencies need to be installed manually and their excutables ne
 - [Quasar ^1.1.2](https://v1.quasar.dev/): a web framework.
 
 ### Nginx setup
+
+> Nginx provides additional HTTP features but requires `sudo` permission. To run Clasnip without Nginx, please go to the next section: [Setup without Nginx](#setup-without-nginx)
 
 1. Include `nginx_server.conf` and `nginx_server_dev.conf` under the http block of `/etc/nginx/nginx.conf` (the path of nginx config file may vary). 
 
@@ -35,6 +37,24 @@ The following dependencies need to be installed manually and their excutables ne
 2. Create a log folder: `mkdir -p /usr/local/clasnip/logs/`. If you do not have permission, you can also change the log folder defined in `nginx_server.conf` and `nginx_server_dev.conf`.
 
 3. Start Nginx: `sudo nginx`, or reload Nginx: `sudo nginx -s reload`.
+
+4. Open `user-interface/src/boot/globalVariables.js`, and make sure `MUX_URL` is defined this way:
+
+    ```javascript
+    // file user-interface/src/boot/globalVariables.js
+    Vue.prototype.MUX_URL = '/clsnpmx' // use nginx to forward requests to server
+    ```
+
+### Setup without Nginx 
+
+You can also run Clasnip without Nginx installation with a simple setup: 
+
+Open `user-interface/src/boot/globalVariables.js`, and change `MUX_URL` to the URL of the server:
+
+    ```javascript
+    // file user-interface/src/boot/globalVariables.js
+    Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
+    ```
 
 ### Clasnip server configuration
 
