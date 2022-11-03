@@ -53,14 +53,14 @@ Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
 
 You can access to Clasnip from the same port as the web app: http://0.0.0.0:9888/ for production and http://0.0.0.0:9600/ for development.
 
-## Troubleshoot: 404 not found
+## Troubleshoots: 404 not found
 
 1. Please make sure `MUX_URL` is set correctly in `user-interface/src/boot/globalVariables.js`.
 
    - If you use Nginx, `Vue.prototype.MUX_URL = '/clsnpmx'`
    - If you does not use Nginx, it should set to the server URL.
 
-2. If you use Nginx, please do not access to Clasnip using the port of the web app (9888 or 9600). You have to use the port described in `nginx_server*.conf` (80 or 9601)
+2. If you use Nginx, please do not access to Clasnip using the port of the web app (9888 or 9600). You have to use the port described in `nginx_server*.conf` (80 or 9601).
 
 3. Make sure both server and web app are running. If they are running, please make sure that both run in the same mode (development/production).
 

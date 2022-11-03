@@ -56,6 +56,8 @@ Open `user-interface/src/boot/globalVariables.js`, and change `MUX_URL` to the U
     Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
     ```
 
+If you want to use Clasnip from different local devices, you need to change 0.0.0.0 to the server's local IP address (usually starts with 192.*).
+
 ### Clasnip server configuration
 
 The config file is located at `server/config/Config.jl`.
