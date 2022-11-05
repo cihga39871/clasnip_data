@@ -56,7 +56,7 @@ Open `user-interface/src/boot/globalVariables.js`, and change `MUX_URL` to the U
 Vue.prototype.MUX_URL = 'http://0.0.0.0:9889'
 ```
 
-If you want to use Clasnip from different local devices, you need to change 0.0.0.0 to the server's local IP address (usually starts with 192.*).
+If you want to use Clasnip from different local devices, you need to change 0.0.0.0 to the server's local IP address (usually starts with 192.*), and make sure firewall policies do not block ports that Clasnip uses.
 
 ### Clasnip server configuration
 
