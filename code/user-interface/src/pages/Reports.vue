@@ -129,7 +129,7 @@
             </div>
           </q-slide-transition>
           <q-slide-transition>
-            <div v-show="!combineClassificationResults">
+            <div v-show="!combineClassificationResults" || classificationResults.length == 1">
               <div class="row" v-for="classificationResult in classificationResults" v-bind:key="classificationResult">
                 <div class="col q-pb-md">
                   <table-viewer
