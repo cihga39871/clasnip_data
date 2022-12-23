@@ -34,7 +34,7 @@ end
 function Base.tryparse(ts::Tuple, s::AbstractString)
 	for t in ts
 		res = tryparse(t, s)
-		if res != nothing
+		if res !== nothing
 			return res
 		end
 	end
@@ -122,7 +122,7 @@ function ARGS_parse(args;
 				keyword_value_indicate = match(Regex("^-{0,2}" * keyword_name * "=(.*)"), arg).captures[1]
 
 				keyword_value = tryparse(keyword_type, keyword_value_indicate)
-				if keyword_value == nothing && keyword_type != Nothing
+				if keyword_value === nothing && keyword_type != Nothing
 					@error "parsing error in the argument $arg: designated value $keyword_value_indicate cannot be parsed as $keyword_type."
 					show(stderr, "text/plain", docs_when_error)
 					exit(1)
@@ -149,7 +149,7 @@ function ARGS_parse(args;
 				end
 
 				keyword_value = tryparse(keyword_type, keyword_value_indicate)
-				if keyword_value == nothing && keyword_type != Nothing
+				if keyword_value === nothing && keyword_type != Nothing
 					@error "parsing error in the argument $arg: designated value $keyword_value_indicate cannot be parsed as $keyword_type."
 					show(stderr, "text/plain", docs_when_error)
 					exit(1)
@@ -167,7 +167,7 @@ function ARGS_parse(args;
 			positional_type = positional_types[ipositional]
 
 			positional_value = tryparse(positional_type, arg)
-			if positional_value == nothing && positional_type != Nothing
+			if positional_value === nothing && positional_type != Nothing
 				@error "parsing error in the argument $arg: $arg cannot be parsed as $positional_type."
 				show(stderr, "text/plain", docs_when_error)
 				exit(1)
