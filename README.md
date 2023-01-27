@@ -1,5 +1,9 @@
 # The code and data repository for Clasnip manuscript
 
+If you use Clasnip web service, please cite:
+
+> Chuan J, Xu H, Hammill DL, Hale L, Chen W, Li X. 2023. Clasnip: a web-based intraspecies classifier and multi-locus sequence typing for pathogenic microorganisms using fragmented sequences. PeerJ 11:e14490 https://doi.org/10.7717/peerj.14490
+
 This repository contains the source code, data and results of Clasnip Classification Program.
 
 You can copy the whole repository by clicking the green "Code" button, and clicking "Download ZIP".
