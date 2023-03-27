@@ -31,5 +31,4 @@ This folder contains analysis results mentioned in the Clasnip manuscript.
   - Move the database folders under `DB_DIR` defined in the `code/server/config/Config.jl`;
   - Update the absolute paths of keys `dbVcfReduced` and `dbVcfReduced` in `db_info.json`;
   - Start or restart the Clasnip server.
-- [real_CLso_sequences_in_tomato](https://github.com/cihga39871/clasnip_data/tree/master/data/real_CLso_sequences_in_tomato) contains FASTA sequences mentioned in the `Results / Real sample classification` section.
 - [BLCA_CLso_16S_performance_comparison](https://github.com/cihga39871/clasnip_data/tree/master/data/BLCA_CLso_16S_performance_comparison) contains [BLCA_16S_analysis_script.jl](https://github.com/cihga39871/clasnip_data/blob/master/data/BLCA_CLso_16S_performance_comparison/BLCA_16S_analysis_script.jl), and performance benchmark tables.
