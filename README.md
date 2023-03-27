@@ -18,7 +18,7 @@ To set up Clasnip, please refer to [the README file under code](code/README.md).
 
 ### 'data' folder
 
-This folder contains analysis results mentioned in the Clasnip manuscript.
+This folder contains analysis results mentioned in the Clasnip manuscript. All sequence files in the folder are fetched from the public NCBI database.
 
 - [database_input_CLso.tar.xz](https://github.com/cihga39871/clasnip_data/blob/master/data/database_input_CLso.tar.xz) is the compressed sequence file for building CLso database. 
   - Building genomic database: please set reference to **GCA_000183665.1_ASM18366v1_genomic.fasta**.
